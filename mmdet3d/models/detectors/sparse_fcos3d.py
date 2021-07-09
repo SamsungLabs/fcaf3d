@@ -16,6 +16,7 @@ class SparseFcos3D(Base3DDetector):
                  bbox_head,
                  auxiliary_head,
                  voxel_size,
+                 pretrained=False,
                  train_cfg=None,
                  test_cfg=None):
         super().__init__()

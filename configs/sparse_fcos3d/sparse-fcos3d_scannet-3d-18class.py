@@ -1,4 +1,4 @@
-voxel_size = .02
+voxel_size = .01
 
 model = dict(
     type='SparseFcos3D',
