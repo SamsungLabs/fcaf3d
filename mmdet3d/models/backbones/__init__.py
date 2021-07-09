@@ -4,6 +4,7 @@ from .nostem_regnet import NoStemRegNet
 from .pointnet2_sa_msg import PointNet2SAMSG
 from .pointnet2_sa_ssg import PointNet2SASSG
 from .second import SECOND
+from .me_resnet import MEResNet3D
 
 __all__ = [
     'ResNet', 'ResNetV1d', 'ResNeXt', 'SSDVGG', 'HRNet', 'NoStemRegNet',
