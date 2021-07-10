@@ -6,7 +6,7 @@ model = dict(
     backbone=dict(
         type='MEResNet3D',
         in_channels=3,
-        depth=18),
+        depth=34),
     neck=dict(
         type='MEFPN3D',
         in_channels=(64, 128, 256, 512),
@@ -21,8 +21,8 @@ model = dict(
     train_cfg=dict(),
     test_cfg=dict(
         nms_pre=1000,
-        iou_thr=.15,
-        score_thr=.01))
+        iou_thr=.25,
+        score_thr=.0))
 
 dataset_type = 'ScanNetDataset'
 data_root = './data/scannet/'
@@ -84,7 +84,7 @@ test_pipeline = [
                 sync_2d=False,
                 flip_ratio_bev_horizontal=0.5,
                 flip_ratio_bev_vertical=0.5),
-            dict(type='IndoorPointSample', num_points=40000),
+            # dict(type='IndoorPointSample', num_points=40000),
             dict(
                 type='DefaultFormatBundle3D',
                 class_names=class_names,
@@ -93,7 +93,7 @@ test_pipeline = [
         ])
 ]
 data = dict(
-    samples_per_gpu=8,
+    samples_per_gpu=4,
     workers_per_gpu=4,
     train=dict(
         type='RepeatDataset',

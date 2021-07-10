@@ -1,5 +1,3 @@
-import torch
-from torch.nn import functional as F
 import MinkowskiEngine as ME
 
 from mmdet.models import DETECTORS
