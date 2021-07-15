@@ -7,8 +7,6 @@ from mmcv.cnn import Scale, bias_init_with_prob
 
 from mmdet3d.core.post_processing import aligned_3d_nms
 
-INF = 1e8
-
 
 class SparseFcos3DHead(nn.Module):
     def __init__(self,
@@ -17,7 +15,7 @@ class SparseFcos3DHead(nn.Module):
                  n_convs,
                  n_reg_outs,
                  voxel_size,
-                 regress_ranges=((-INF, .5), (.5, 1.), (1., 2.), (2., INF)),
+                 regress_ranges,
                  loss_centerness=dict(
                      type='CrossEntropyLoss',
                      use_sigmoid=True,
@@ -252,6 +250,7 @@ class ScanNetSparseFcos3DHead(SparseFcos3DHead):
 
     @torch.no_grad()
     def get_targets(self, points, gt_bboxes, gt_labels):
+        float_max = 1e8
         assert len(points) == len(self.regress_ranges)
         # expand regress ranges to align with points
         expanded_regress_ranges = [
@@ -294,12 +293,12 @@ class ScanNetSparseFcos3DHead(SparseFcos3DHead):
 
         # if there are still more than one objects for a location,
         # we choose the one with minimal area
-        volumes = torch.where(inside_gt_bbox_mask, volumes, torch.ones_like(volumes) * INF)
-        volumes = torch.where(inside_regress_range, volumes, torch.ones_like(volumes) * INF)
+        volumes = torch.where(inside_gt_bbox_mask, volumes, torch.ones_like(volumes) * float_max)
+        volumes = torch.where(inside_regress_range, volumes, torch.ones_like(volumes) * float_max)
         min_area, min_area_inds = volumes.min(dim=1)
 
         labels = gt_labels[min_area_inds]
-        labels = torch.where(min_area == INF, torch.ones_like(labels) * self.n_classes, labels)
+        labels = torch.where(min_area == float_max, torch.ones_like(labels) * self.n_classes, labels)
         bbox_targets = bbox_targets[range(n_points), min_area_inds]
         centerness_targets = compute_centerness(bbox_targets)
 
