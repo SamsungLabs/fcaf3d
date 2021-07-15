@@ -14,9 +14,10 @@ class SparseFcos3DHead(nn.Module):
     def __init__(self,
                  n_classes,
                  n_channels,
+                 n_convs,
                  n_reg_outs,
                  voxel_size,
-                 regress_ranges=((-INF, .4), (.4, .8), (.8, 1.6), (1.6, INF)),
+                 regress_ranges=((-INF, .5), (.5, 1.), (1., 2.), (2., INF)),
                  loss_centerness=dict(
                      type='CrossEntropyLoss',
                      use_sigmoid=True,
@@ -39,15 +40,37 @@ class SparseFcos3DHead(nn.Module):
         self.loss_cls = build_loss(loss_cls)
         self.train_cfg = train_cfg
         self.test_cfg = test_cfg
-        self._init_layers(n_channels, n_reg_outs)
+        self._init_layers(n_channels, n_convs, n_reg_outs)
 
-    def _init_layers(self, n_channels, n_reg_outs):
+    @staticmethod
+    def _make_block(in_channels, out_channels):
+        return nn.Sequential(
+            ME.MinkowskiConvolution(in_channels, out_channels, kernel_size=3, dimension=3),
+            ME.MinkowskiBatchNorm(out_channels),
+            ME.MinkowskiELU()
+        )
+
+    def _init_layers(self, n_channels, n_convs, n_reg_outs):
+        self.cls_convs = nn.Sequential(*[
+            self._make_block(n_channels, n_channels)
+            for _ in range(n_convs)
+        ])
+        self.reg_convs = nn.Sequential(*[
+            self._make_block(n_channels, n_channels)
+            for _ in range(n_convs)
+        ])
         self.centerness_conv = ME.MinkowskiConvolution(n_channels, 1, kernel_size=1, dimension=3)
         self.reg_conv = ME.MinkowskiConvolution(n_channels, n_reg_outs, kernel_size=1, dimension=3)
         self.cls_conv = ME.MinkowskiConvolution(n_channels, self.n_classes, kernel_size=1, bias=True, dimension=3)
         self.scales = nn.ModuleList([Scale(1.) for _ in self.regress_ranges])
 
     def init_weights(self):
+        for module in self.cls_convs.modules():
+            if type(module) == ME.MinkowskiConvolution:
+                nn.init.normal_(module.kernel, std=.01)
+        for module in self.reg_convs.modules():
+            if type(module) == ME.MinkowskiConvolution:
+                nn.init.normal_(module.kernel, std=.01)
         nn.init.normal_(self.centerness_conv.kernel, std=.01)
         nn.init.normal_(self.reg_conv.kernel, std=.01)
         nn.init.normal_(self.cls_conv.kernel, std=.01)
@@ -202,9 +225,11 @@ class SparseFcos3DHead(nn.Module):
 @HEADS.register_module()
 class ScanNetSparseFcos3DHead(SparseFcos3DHead):
     def forward_single(self, x, scale):
-        centerness = self.centerness_conv(x).features
-        bbox_pred = torch.exp(scale(self.reg_conv(x).features))
-        cls_score = self.cls_conv(x).features
+        cls = self.cls_convs(x)
+        reg = self.reg_convs(x)
+        centerness = self.centerness_conv(reg).features
+        bbox_pred = torch.exp(scale(self.reg_conv(reg).features))
+        cls_score = self.cls_conv(cls).features
 
         centernesses, bbox_preds, cls_scores, points = [], [], [], []
         for permutation in x.decomposition_permutations:

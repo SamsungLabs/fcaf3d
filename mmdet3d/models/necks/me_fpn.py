@@ -28,7 +28,8 @@ class MEFPN3D(nn.Module):
     def init_weights(self):
         pass
 
-    def _make_up_block(self, in_channels, out_channels):
+    @staticmethod
+    def _make_up_block(in_channels, out_channels):
         return nn.Sequential(
             ME.MinkowskiGenerativeConvolutionTranspose(
                 in_channels,
@@ -44,7 +45,8 @@ class MEFPN3D(nn.Module):
             ME.MinkowskiELU()
         )
 
-    def _make_block(self, in_channels, out_channels):
+    @staticmethod
+    def _make_block(in_channels, out_channels):
         return nn.Sequential(
             ME.MinkowskiConvolution(in_channels, out_channels, kernel_size=3, dimension=3),
             ME.MinkowskiBatchNorm(out_channels),
