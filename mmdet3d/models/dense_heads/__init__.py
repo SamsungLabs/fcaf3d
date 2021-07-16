@@ -10,7 +10,7 @@ from .parta2_rpn_head import PartA2RPNHead
 from .shape_aware_head import ShapeAwareHead
 from .ssd_3d_head import SSD3DHead
 from .vote_head import VoteHead
-from .sparse_fcos3d_head import ScanNetSparseFcos3DHead
+from .sparse_fcos3d_head import ScanNetSparseFcos3DHead, Fcos3dAssigner, Fcos3dAssignerV2
 
 __all__ = [
     'Anchor3DHead', 'FreeAnchor3DHead', 'PartA2RPNHead', 'VoteHead',
