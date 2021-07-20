@@ -21,7 +21,7 @@ model = dict(
         assigner=dict(
             type='Fcos3dAssignerV2',
             topk=27,
-            regress_ranges=((-1e8, .5), (.5, 1.), (1., 2.), (2., 1e8)))),
+            regress_ranges=((-1e8, .6), (.4, 1.1), (0.9, 2.1), (1.9, 1e8)))),
     auxiliary_head=dict(),
     train_cfg=dict(),
     test_cfg=dict(
@@ -135,7 +135,7 @@ lr_config = dict(policy='step', warmup=None, step=[8, 11])
 runner = dict(type='EpochBasedRunner', max_epochs=12)
 custom_hooks = [dict(type='EmptyCacheHook', after_iter=True)]
 
-checkpoint_config = dict(interval=1)
+checkpoint_config = dict(interval=1, max_keep_ckpts=1)
 log_config = dict(
     interval=50,
     hooks=[
