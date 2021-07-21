@@ -20,7 +20,7 @@ model = dict(
         voxel_size=voxel_size,
         assigner=dict(
             type='Fcos3dAssignerV2',
-            topk=27,
+            topk=19,
             regress_ranges=((-1e8, .6), (.4, 1.1), (0.9, 2.1), (1.9, 1e8)))),
     auxiliary_head=dict(),
     train_cfg=dict(),
@@ -99,11 +99,11 @@ test_pipeline = [
         ])
 ]
 data = dict(
-    samples_per_gpu=4,
+    samples_per_gpu=8,
     workers_per_gpu=4,
     train=dict(
         type='RepeatDataset',
-        times=5,
+        times=10,
         dataset=dict(
             type=dataset_type,
             data_root=data_root,
