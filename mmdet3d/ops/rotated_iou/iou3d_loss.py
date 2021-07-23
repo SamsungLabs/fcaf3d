@@ -7,14 +7,6 @@ from mmdet.models.losses.utils import weighted_loss
 from .oriented_iou_loss import cal_giou_3d, cal_iou_3d
 
 
-# def shift_center(boxes):
-#     return torch.cat((
-#         boxes[..., :2],
-#         boxes[..., 2:3] + boxes[5:6] / 2.,  # TODO: ?
-#         boxes[..., 3:]
-#     ), dim=-1)
-
-
 @weighted_loss
 def iou_3d_loss(pred, target):
     return 1 - cal_iou_3d(pred[None, ...], target[None, ...])
@@ -46,7 +38,6 @@ class IoU3DMixin(nn.Module):
         reduction = (
             reduction_override if reduction_override else self.reduction)
         if weight is not None and weight.dim() > 1:
-            # assert weight.shape == pred.shape # TODO: ?
             weight = weight.mean(-1)
         loss = self.loss_weight * self.loss_function(
             pred,
