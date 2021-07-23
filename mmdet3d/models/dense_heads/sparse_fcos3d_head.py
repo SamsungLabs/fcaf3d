@@ -438,7 +438,6 @@ class SunRgbdFcos3dAssigner(BaseAssigner):
     def __init__(self, regress_ranges, topk):
         self.regress_ranges = regress_ranges
         self.n_scales = len(regress_ranges)
-        # todo: use topk !!!
         self.topk = topk
 
     def assign(self, points, gt_bboxes, gt_labels):
@@ -476,7 +475,6 @@ class SunRgbdFcos3dAssigner(BaseAssigner):
         dz_min = centers[..., 2] - gt_bboxes[..., 2] + gt_bboxes[..., 5] / 2
         dz_max = gt_bboxes[..., 2] + gt_bboxes[..., 5] / 2 - centers[..., 2]
         bbox_targets = torch.stack((dx_min, dx_max, dy_min, dy_max, dz_min, dz_max, gt_bboxes[..., 6]), dim=-1)
-        centerness_targets = compute_centerness(bbox_targets)
 
         # condition1: inside a gt bbox
         inside_gt_bbox_mask = bbox_targets[..., :6].min(-1)[0] > 0  # skip angle
@@ -487,10 +485,18 @@ class SunRgbdFcos3dAssigner(BaseAssigner):
                 (max_regress_distance >= regress_ranges[..., 0])
                 & (max_regress_distance <= regress_ranges[..., 1]))
 
+        # condition3: limit topk locations per box by centerness
+        centerness = compute_centerness(bbox_targets)
+        centerness = torch.where(inside_gt_bbox_mask, centerness, torch.ones_like(centerness) * -1)
+        centerness = torch.where(inside_regress_range, centerness, torch.ones_like(centerness) * -1)
+        top_centerness = torch.topk(centerness, self.topk, dim=0).values[-1]
+        inside_top_centerness = centerness > top_centerness.unsqueeze(0)
+
         # if there are still more than one objects for a location,
         # we choose the one with minimal area
         volumes = torch.where(inside_gt_bbox_mask, volumes, torch.ones_like(volumes) * float_max)
         volumes = torch.where(inside_regress_range, volumes, torch.ones_like(volumes) * float_max)
+        volumes = torch.where(inside_top_centerness, volumes, torch.ones_like(volumes) * float_max)
         min_area, min_area_inds = volumes.min(dim=1)
 
         labels = gt_labels[min_area_inds]
