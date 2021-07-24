@@ -43,7 +43,7 @@ train_pipeline = [
         load_dim=6,
         use_dim=[0, 1, 2, 3, 4, 5]),
     dict(type='LoadAnnotations3D'),
-    dict(type='IndoorPointSample', num_points=20000),  # todo: ?
+    dict(type='IndoorPointSample', num_points=25000),
     dict(
         type='RandomFlip3D',
         sync_2d=False,
@@ -91,11 +91,11 @@ test_pipeline = [
         ])
 ]
 data = dict(
-    samples_per_gpu=4,  # todo: 8
+    samples_per_gpu=8,
     workers_per_gpu=4,
     train=dict(
         type='RepeatDataset',
-        times=1,  # todo: 10?
+        times=3,
         dataset=dict(
             type=dataset_type,
             data_root=data_root,
