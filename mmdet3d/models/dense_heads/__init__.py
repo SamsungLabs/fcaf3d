@@ -13,6 +13,10 @@ from .vote_head import VoteHead
 from .sparse_fcos3d_head import (
     ScanNetSparseFcos3DHead, ScanNetFcos3dAssigner,
     SunRgbdSparseFcos3DHead, SunRgbdFcos3dAssigner)
+from .sparse_yolo3d_head import (
+    ScanNetSparseYolo3DHead, ScanNetYolo3dAssigner,
+    SunRgbdSparseYolo3DHead, SunRgbdYolo3dAssigner
+)
 
 __all__ = [
     'Anchor3DHead', 'FreeAnchor3DHead', 'PartA2RPNHead', 'VoteHead',

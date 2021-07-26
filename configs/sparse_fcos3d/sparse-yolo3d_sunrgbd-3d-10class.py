@@ -12,7 +12,7 @@ model = dict(
         in_channels=(64, 128, 256, 512),
         out_channels=128),
     bbox_head=dict(
-        type='SunRgbdSparseFcos3DHead',
+        type='SunRgbdSparseYolo3DHead',
         n_classes=10,
         n_channels=128,
         n_convs=0,
@@ -20,7 +20,7 @@ model = dict(
         voxel_size=voxel_size,
         loss_bbox=dict(type='IoU3DLoss', loss_weight=1.0),
         assigner=dict(
-            type='SunRgbdFcos3dAssigner',
+            type='SunRgbdYolo3dAssigner',
             topk=19,
             regress_ranges=((-1e8, .6), (.4, 1.1), (0.9, 2.1), (1.9, 1e8)))),
     auxiliary_head=dict(),
