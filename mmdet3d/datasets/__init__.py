@@ -15,7 +15,7 @@ from .pipelines import (BackgroundPointsFilter, GlobalAlignment,
                         ObjectRangeFilter, ObjectSample, PointShuffle,
                         PointsRangeFilter, RandomDropPointsColor, RandomFlip3D,
                         RandomJitterPoints, VoxelBasedPointSampler)
-from .s3dis_dataset import S3DISSegDataset
+from .s3dis_dataset import S3DISSegDataset, S3DISDataset
 from .scannet_dataset import ScanNetDataset, ScanNetSegDataset
 from .semantickitti_dataset import SemanticKITTIDataset
 from .sunrgbd_dataset import SUNRGBDDataset
