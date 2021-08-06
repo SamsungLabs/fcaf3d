@@ -7,12 +7,11 @@ from .base import Base3DDetector
 
 
 @DETECTORS.register_module()
-class SparseFcos3D(Base3DDetector):
+class SingleStageSparse3DDetector(Base3DDetector):
     def __init__(self,
                  backbone,
                  neck,
                  bbox_head,
-                 auxiliary_head,
                  voxel_size,
                  pretrained=False,
                  train_cfg=None,
@@ -23,8 +22,6 @@ class SparseFcos3D(Base3DDetector):
         bbox_head.update(train_cfg=train_cfg)
         bbox_head.update(test_cfg=test_cfg)
         self.bbox_head = build_head(bbox_head)
-        # todo: utilize auxiliary_head
-        # self.auxiliary_head = build_head(auxiliary_head)
         self.voxel_size = voxel_size
         self.train_cfg = train_cfg
         self.test_cfg = test_cfg
@@ -34,8 +31,6 @@ class SparseFcos3D(Base3DDetector):
         self.backbone.init_weights()
         self.neck.init_weights()
         self.bbox_head.init_weights()
-        # todo: utilize auxiliary_head
-        # self.auxiliary_head.init_weights()
 
     def extract_feat(self, points, img_metas):
         """Extract features from points."""
@@ -44,24 +39,25 @@ class SparseFcos3D(Base3DDetector):
             device=points[0].device)
         x = ME.SparseTensor(coordinates=coordinates, features=features)
         x = self.backbone(x)
-        x = self.neck(x)
         return x
 
     def forward_train(self,
                       points,
-                      img_metas,
                       gt_bboxes_3d,
-                      gt_labels_3d):
+                      gt_labels_3d,
+                      img_metas):
         x = self.extract_feat(points, img_metas)
+        x, auxiliary_losses = self.neck(x, gt_bboxes_3d, gt_labels_3d, img_metas)
         outs = self.bbox_head(x)
         loss_inputs = outs + (gt_bboxes_3d, gt_labels_3d, img_metas)
         losses = self.bbox_head.loss(*loss_inputs)
-        # todo: utilize auxiliary_head
+        losses.update(auxiliary_losses)
         return losses
 
     def simple_test(self, points, img_metas, imgs=None, rescale=False):
         """Test function without augmentaiton."""
         x = self.extract_feat(points, img_metas)
+        x = self.neck(x, img_metas=img_metas)
         outs = self.bbox_head(x)
         bbox_list = self.bbox_head.get_bboxes(
             *outs, img_metas, rescale=rescale)
