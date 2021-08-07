@@ -1,7 +1,7 @@
 voxel_size = .01
 
 model = dict(
-    type='SparseFcos3D',
+    type='SingleStageSparse3DDetector',
     voxel_size=voxel_size,
     backbone=dict(
         type='MEResNet3D',
@@ -10,31 +10,31 @@ model = dict(
     neck=dict(
         type='MEFPN3D',
         in_channels=(64, 128, 256, 512),
-        out_channels=128),
+        out_channels=128,
+        voxel_size=voxel_size),
     bbox_head=dict(
-        type='ScanNetSparseFcos3DHead',
-        n_classes=18,
+        type='SunRgbdSparseFcos3DHead',
+        n_classes=10,
         n_channels=128,
         n_convs=0,
-        n_reg_outs=6,
+        n_reg_outs=7,
         voxel_size=voxel_size,
+        loss_bbox=dict(type='IoU3DLoss', loss_weight=1.0),
         assigner=dict(
-            type='ScanNetFcos3dAssigner',
+            type='SunRgbdFcos3dAssigner',
             topk=19,
             regress_ranges=((-1e8, .6), (.4, 1.1), (0.9, 2.1), (1.9, 1e8)))),
-    auxiliary_head=dict(),
     train_cfg=dict(),
     test_cfg=dict(
         nms_pre=1000,
-        iou_thr=.25,
-        score_thr=.0))
+        nms_thr=.25,
+        use_rotate_nms=True,
+        score_thr=.05))  # todo: ?
 
-dataset_type = 'ScanNetDataset'
-data_root = './data/scannet/'
-class_names = ('cabinet', 'bed', 'chair', 'sofa', 'table', 'door', 'window',
-               'bookshelf', 'picture', 'counter', 'desk', 'curtain',
-               'refrigerator', 'showercurtrain', 'toilet', 'sink', 'bathtub',
-               'garbagebin')
+dataset_type = 'SUNRGBDDataset'
+data_root = 'data/sunrgbd/'
+class_names = ('bed', 'table', 'sofa', 'chair', 'toilet', 'desk', 'dresser',
+               'night_stand', 'bookshelf', 'bathtub')
 train_pipeline = [
     dict(
         type='LoadPointsFromFile',
@@ -43,17 +43,15 @@ train_pipeline = [
         load_dim=6,
         use_dim=[0, 1, 2, 3, 4, 5]),
     dict(type='LoadAnnotations3D'),
-    dict(type='GlobalAlignment', rotation_axis=2),
-    dict(type='IndoorPointSample', num_points=40000),
+    dict(type='IndoorPointSample', num_points=30000),
     dict(
         type='RandomFlip3D',
         sync_2d=False,
-        flip_ratio_bev_horizontal=0.5,
-        flip_ratio_bev_vertical=0.5),
+        flip_ratio_bev_horizontal=0.5),
     dict(
         type='GlobalRotScaleTrans',
-        rot_range=[-0.087266, 0.087266],
-        scale_ratio_range=[.9, 1.1],
+        rot_range=[-0.523599, 0.523599],
+        scale_ratio_range=[0.85, 1.15],
         translation_std=[.1, .1, .1],
         shift_height=False),
     dict(type='DefaultFormatBundle3D', class_names=class_names),
@@ -68,7 +66,6 @@ test_pipeline = [
         shift_height=False,
         load_dim=6,
         use_dim=[0, 1, 2, 3, 4, 5]),
-    dict(type='GlobalAlignment', rotation_axis=2),
     dict(
         type='MultiScaleFlipAug3D',
         img_scale=(1333, 800),
@@ -98,11 +95,11 @@ data = dict(
     workers_per_gpu=4,
     train=dict(
         type='RepeatDataset',
-        times=10,
+        times=3,
         dataset=dict(
             type=dataset_type,
             data_root=data_root,
-            ann_file=data_root + 'scannet_infos_train.pkl',
+            ann_file=data_root + 'sunrgbd_infos_train.pkl',
             pipeline=train_pipeline,
             filter_empty_gt=True,
             classes=class_names,
@@ -110,7 +107,7 @@ data = dict(
     val=dict(
         type=dataset_type,
         data_root=data_root,
-        ann_file=data_root + 'scannet_infos_val.pkl',
+        ann_file=data_root + 'sunrgbd_infos_val.pkl',
         pipeline=test_pipeline,
         classes=class_names,
         test_mode=True,
@@ -118,7 +115,7 @@ data = dict(
     test=dict(
         type=dataset_type,
         data_root=data_root,
-        ann_file=data_root + 'scannet_infos_val.pkl',
+        ann_file=data_root + 'sunrgbd_infos_val.pkl',
         pipeline=test_pipeline,
         classes=class_names,
         test_mode=True,

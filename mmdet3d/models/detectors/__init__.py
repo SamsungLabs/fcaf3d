@@ -13,7 +13,7 @@ from .single_stage_mono3d import SingleStageMono3DDetector
 from .ssd3dnet import SSD3DNet
 from .votenet import VoteNet
 from .voxelnet import VoxelNet
-from .sparse_fcos3d import SparseFcos3D
+from .single_stage_sparse import SingleStageSparse3DDetector
 
 __all__ = [
     'Base3DDetector', 'VoxelNet', 'DynamicVoxelNet', 'MVXTwoStageDetector',

@@ -1,7 +1,7 @@
 voxel_size = .01
 
 model = dict(
-    type='SparseFcos3D',
+    type='SingleStageSparse3DDetector',
     voxel_size=voxel_size,
     backbone=dict(
         type='MEResNet3D',
@@ -10,7 +10,9 @@ model = dict(
     neck=dict(
         type='MEFPN3D',
         in_channels=(64, 128, 256, 512),
-        out_channels=128),
+        out_channels=128,
+        voxel_size=voxel_size,
+        score_threshold=1),
     bbox_head=dict(
         type='ScanNetSparseFcos3DHead',
         n_classes=5,
@@ -22,7 +24,6 @@ model = dict(
             type='ScanNetFcos3dAssigner',
             topk=19,
             regress_ranges=((-1e8, .6), (.4, 1.1), (0.9, 2.1), (1.9, 1e8)))),
-    auxiliary_head=dict(),
     train_cfg=dict(),
     test_cfg=dict(
         nms_pre=1000,
@@ -92,7 +93,7 @@ test_pipeline = [
         ])
 ]
 data = dict(
-    samples_per_gpu=3,  # todo: 8
+    samples_per_gpu=8,
     workers_per_gpu=4,
     train=dict(
         type='RepeatDataset',
