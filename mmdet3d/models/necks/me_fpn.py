@@ -28,8 +28,10 @@ class MEFPN3D(nn.Module):
         for i in range(self.n_scales):
             if i > 0:
                 self.__setattr__(f'up_block_{i}', self._make_up_block(in_channels[i], in_channels[i - 1]))
-                self.__setattr__(f'score_block_{i}',
-                                 ME.MinkowskiConvolution(in_channels[i - 1], 1, kernel_size=1, bias=True, dimension=3))
+                if self.score_threshold > 0:
+                    self.__setattr__(
+                        f'score_block_{i}',
+                        ME.MinkowskiConvolution(in_channels[i - 1], 1, kernel_size=1, bias=True, dimension=3))
             self.__setattr__(f'out_block_{i}', self._make_block(in_channels[i], out_channels))
 
     def forward(self, inputs, gt_bboxes=None, gt_labels=None, img_metas=None):
@@ -41,20 +43,24 @@ class MEFPN3D(nn.Module):
             outs.append(self.__getattr__(f'out_block_{i}')(x))
             if i > 0:
                 x = self.__getattr__(f'up_block_{i}')(x)
-                score = self.__getattr__(f'score_block_{i}')(x)
-                mask, loss = self._prune(score, inputs[i - 1], gt_bboxes, gt_labels, img_metas)
-                x = self.pruning(x, mask)
-                losses += loss
+                if self.score_threshold > 0:
+                    score = self.__getattr__(f'score_block_{i}')(x)
+                    mask, loss = self._prune(score, inputs[i - 1], gt_bboxes, gt_labels, img_metas)
+                    x = self.pruning(x, mask)
+                    losses += loss
         outs = outs[::-1]
-        if len(losses) == 0:  # training
-            return outs
-        return outs, dict(loss_pruning=torch.mean(torch.cat(losses)))
+        if gt_bboxes is not None:  # training
+            if self.score_threshold > 0:
+                losses = dict(loss_pruning=torch.mean(torch.cat(losses)))
+            else:
+                losses = dict()
+            return outs, losses
+        return outs
 
     def init_weights(self):
         pass
 
     def _prune(self, score, valid, gt_bboxes, gt_labels, img_metas):
-        training = gt_bboxes is not None
         size = score.tensor_stride[0] * self.voxel_size
         points = [point * self.voxel_size for point in score.decomposed_coordinates]
         permutations = score.decomposition_permutations
@@ -66,7 +72,7 @@ class MEFPN3D(nn.Module):
             masks.append(self._get_score_mask(scores[i], topks[i]))
 
         losses = []
-        if training:
+        if gt_bboxes is not None:  # training
             for i in range(len(img_metas)):
                 gt_mask = self._get_gt_mask(points[i], gt_bboxes[i], gt_labels[i], img_metas[i], size)
                 masks[i] = torch.logical_or(masks[i], gt_mask)
@@ -78,12 +84,9 @@ class MEFPN3D(nn.Module):
         return prune_mask, losses
 
     def _get_score_mask(self, scores, topk):
-        if self.score_threshold < 0:
-            mask = scores.new_ones((len(scores)), dtype=torch.bool)
-        else:
-            mask = scores.new_zeros((len(scores)), dtype=torch.bool)
-            ids = torch.topk(scores.squeeze(1), topk, sorted=False).indices
-            mask[ids] = True
+        mask = scores.new_zeros((len(scores)), dtype=torch.bool)
+        ids = torch.topk(scores.squeeze(1), topk, sorted=False).indices
+        mask[ids] = True
         return mask
 
     def _get_gt_mask(self, points, gt_bboxes, gt_labels, img_meta, size):
