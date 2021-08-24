@@ -11,6 +11,7 @@ class MEFPN3D(nn.Module):
                  in_channels,
                  out_channels,
                  voxel_size,
+                 n_outs=4,
                  score_threshold=-1,
                  gt_threshold=2.5,
                  loss=dict(
@@ -20,6 +21,7 @@ class MEFPN3D(nn.Module):
                      loss_weight=1.0)):
         super(MEFPN3D, self).__init__()
         self.voxel_size = voxel_size
+        self.n_outs = n_outs
         self.score_threshold = score_threshold
         self.gt_threshold = gt_threshold
         self.loss = build_loss(loss)
@@ -32,7 +34,8 @@ class MEFPN3D(nn.Module):
                     self.__setattr__(
                         f'score_block_{i}',
                         ME.MinkowskiConvolution(in_channels[i - 1], 1, kernel_size=1, bias=True, dimension=3))
-            self.__setattr__(f'out_block_{i}', self._make_block(in_channels[i], out_channels))
+            if i < self.n_outs:
+                self.__setattr__(f'out_block_{i}', self._make_block(in_channels[i], out_channels))
 
     def forward(self, inputs, gt_bboxes=None, gt_labels=None, img_metas=None):
         outs, losses = [], []
@@ -40,7 +43,8 @@ class MEFPN3D(nn.Module):
         for i in range(self.n_scales - 1, -1, -1):
             if i < self.n_scales - 1:
                 x = inputs[i] + x
-            outs.append(self.__getattr__(f'out_block_{i}')(x))
+            if i < self.n_outs:
+                outs.append(self.__getattr__(f'out_block_{i}')(x))
             if i > 0:
                 x = self.__getattr__(f'up_block_{i}')(x)
                 if self.score_threshold > 0:
