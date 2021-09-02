@@ -145,8 +145,8 @@ class SparseFcos3DHead(nn.Module):
                 pos_centerness, pos_centerness_targets, avg_factor=n_pos
             )
             loss_bbox = self.loss_bbox(
-                self._bbox_pred_to_loss(pos_points, pos_bbox_preds),
-                self._bbox_pred_to_loss(pos_points, pos_bbox_targets),
+                self._bbox_to_loss(self._bbox_pred_to_bbox(pos_points, pos_bbox_preds)),
+                self._bbox_to_loss(pos_bbox_targets),
                 weight=pos_centerness_targets.squeeze(1),
                 avg_factor=centerness_denorm
             )
@@ -196,7 +196,7 @@ class SparseFcos3DHead(nn.Module):
                 scores = scores[ids]
                 point = point[ids]
 
-            bboxes = self._bbox_pred_to_result(point, bbox_pred)
+            bboxes = self._bbox_pred_to_bbox(point, bbox_pred)
             mlvl_bboxes.append(bboxes)
             mlvl_scores.append(scores)
 
@@ -209,10 +209,10 @@ class SparseFcos3DHead(nn.Module):
     def forward_single(self, x, scale):
         raise NotImplementedError
 
-    def _bbox_pred_to_loss(self, points, bbox_preds):
+    def _bbox_pred_to_bbox(self, points, bbox_pred):
         raise NotImplementedError
 
-    def _bbox_pred_to_result(self, points, bbox_preds):
+    def _bbox_to_loss(self, bbox):
         raise NotImplementedError
 
     def _nms(self, bboxes, scores, img_meta):
@@ -241,11 +241,33 @@ class ScanNetSparseFcos3DHead(SparseFcos3DHead):
 
         return centernesses, bbox_preds, cls_scores, points
 
-    def _bbox_pred_to_loss(self, points, bbox_preds):
-        return aligned_bbox_pred_to_bbox(points, bbox_preds)
+    @staticmethod
+    def _bbox_pred_to_bbox(points, bbox_pred):
+        # dx_min, dx_max, dy_min, dy_max, dz_min, dz_max ->
+        # x, y, z, w, l, h
+        return torch.stack([
+            points[:, 0] + (bbox_pred[:, 1] - bbox_pred[:, 0]) / 2,
+            points[:, 1] + (bbox_pred[:, 3] - bbox_pred[:, 2]) / 2,
+            points[:, 2] + (bbox_pred[:, 5] - bbox_pred[:, 4]) / 2,
+            bbox_pred[:, 0] + bbox_pred[:, 1],
+            bbox_pred[:, 2] + bbox_pred[:, 3],
+            bbox_pred[:, 4] + bbox_pred[:, 5],
+        ], -1)
+    @staticmethod
+    def _aligned_bbox_to_limits(bbox):
+        # x, y, z, w, l, h ->
+        # x_min, y_min, z_min, x_max, y_max, z_max
+        return torch.stack((
+            bbox[:, 0] - bbox[:, 3] / 2.,
+            bbox[:, 1] - bbox[:, 4] / 2.,
+            bbox[:, 2] - bbox[:, 5] / 2.,
+            bbox[:, 0] + bbox[:, 3] / 2.,
+            bbox[:, 1] + bbox[:, 4] / 2.,
+            bbox[:, 2] + bbox[:, 5] / 2.,
+        ), dim=1)
 
-    def _bbox_pred_to_result(self, points, bbox_preds):
-        return aligned_bbox_pred_to_bbox(points, bbox_preds)
+    def _bbox_to_loss(self, bbox):
+        return self._aligned_bbox_to_limits(bbox)
 
     def _nms(self, bboxes, scores, img_meta):
         scores, labels = scores.max(dim=1)
@@ -253,8 +275,11 @@ class ScanNetSparseFcos3DHead(SparseFcos3DHead):
         bboxes = bboxes[ids]
         scores = scores[ids]
         labels = labels[ids]
+        bboxes = self._aligned_bbox_to_limits(bboxes)
         ids = aligned_3d_nms(bboxes, scores, labels, self.test_cfg.iou_thr)
         bboxes = bboxes[ids]
+        # x_min, y_min, z_min, x_max, y_max, z_max ->
+        # x, y, z, w, l, h
         bboxes = torch.stack((
             (bboxes[:, 0] + bboxes[:, 3]) / 2.,
             (bboxes[:, 1] + bboxes[:, 4]) / 2.,
@@ -265,17 +290,6 @@ class ScanNetSparseFcos3DHead(SparseFcos3DHead):
         ), dim=1)
         bboxes = img_meta['box_type_3d'](bboxes, origin=(.5, .5, .5), box_dim=6, with_yaw=False)
         return bboxes, scores[ids], labels[ids]
-
-
-def aligned_bbox_pred_to_bbox(points, bbox_pred):
-    return torch.stack([
-        points[:, 0] - bbox_pred[:, 0],
-        points[:, 1] - bbox_pred[:, 2],
-        points[:, 2] - bbox_pred[:, 4],
-        points[:, 0] + bbox_pred[:, 1],
-        points[:, 1] + bbox_pred[:, 3],
-        points[:, 2] + bbox_pred[:, 5]
-    ], -1)
 
 
 def compute_centerness(bbox_targets):
@@ -358,7 +372,7 @@ class ScanNetFcos3dAssigner(BaseAssigner):
         bbox_targets = bbox_targets[range(n_points), min_area_inds]
         centerness_targets = compute_centerness(bbox_targets)
 
-        return centerness_targets, bbox_targets, labels
+        return centerness_targets, gt_bboxes[range(n_points), min_area_inds], labels
 
 
 @HEADS.register_module()
@@ -385,35 +399,36 @@ class SunRgbdSparseFcos3DHead(SparseFcos3DHead):
 
         return centernesses, bbox_preds, cls_scores, points
 
-    def _bbox_pred_to_loss(self, points, bbox_preds):
-        return self._bbox_pred_to_bbox(points, bbox_preds)
-
-    def _bbox_pred_to_result(self, points, bbox_preds):
-        return self._bbox_pred_to_bbox(points, bbox_preds)
-
     @staticmethod
     def _bbox_pred_to_bbox(points, bbox_pred):
         if bbox_pred.shape[0] == 0:
             return bbox_pred
 
-        shift = torch.stack((
-            (bbox_pred[:, 1] - bbox_pred[:, 0]) / 2,
-            (bbox_pred[:, 3] - bbox_pred[:, 2]) / 2,
-            (bbox_pred[:, 5] - bbox_pred[:, 4]) / 2
-        ), dim=-1).view(-1, 1, 3)
-        shift = rotation_3d_in_axis(shift, bbox_pred[:, 6], axis=2)[:, 0, :]
-        center = points + shift
-        size = torch.stack((
-            bbox_pred[:, 0] + bbox_pred[:, 1],
-            bbox_pred[:, 2] + bbox_pred[:, 3],
-            bbox_pred[:, 4] + bbox_pred[:, 5]
+        # dx_min, dx_max, dy_min, dy_max, dz_min, dz_max, sin(2a)ln(q), cos(2a)ln(q) ->
+        # x_center, y_center, z_center, w, l, h, alpha
+        scale = bbox_pred[:, 0] + bbox_pred[:, 1] + bbox_pred[:, 2] + bbox_pred[:, 3]
+        q = torch.exp(torch.sqrt(torch.pow(bbox_pred[:, 6], 2) + torch.pow(bbox_pred[:, 7], 2)))
+        alpha = 0.5 * torch.atan2(bbox_pred[:, 6], bbox_pred[:, 7])
+        return torch.stack((
+            points[:, 0] + (bbox_pred[:, 1] - bbox_pred[:, 0]) / 2,
+            points[:, 1] + (bbox_pred[:, 3] - bbox_pred[:, 2]) / 2,
+            points[:, 2] + (bbox_pred[:, 5] - bbox_pred[:, 4]) / 2,
+            scale / (1 + q),
+            scale * q / (1 + q),
+            bbox_pred[:, 5] + bbox_pred[:, 4],
+            alpha
         ), dim=-1)
-        return torch.cat((center, size, bbox_pred[:, 6:7]), dim=-1)
+
+    @staticmethod
+    def _bbox_to_loss(bbox):
+        return bbox
 
     def _nms(self, bboxes, scores, img_meta):
         # Add a dummy background class to the end. Nms needs to be fixed in the future.
         padding = scores.new_zeros(scores.shape[0], 1)
         scores = torch.cat([scores, padding], dim=1)
+        # x, y, z, w, l, h, alpha ->
+        # x_min, y_min, x_max, y_max, alpha
         bboxes_for_nms = torch.stack((
             bboxes[:, 0] - bboxes[:, 3] / 2,
             bboxes[:, 1] - bboxes[:, 4] / 2,
@@ -504,4 +519,4 @@ class SunRgbdFcos3dAssigner(BaseAssigner):
         bbox_targets = bbox_targets[range(n_points), min_area_inds]
         centerness_targets = compute_centerness(bbox_targets)
 
-        return centerness_targets, bbox_targets, labels
+        return centerness_targets, gt_bboxes[range(n_points), min_area_inds], labels

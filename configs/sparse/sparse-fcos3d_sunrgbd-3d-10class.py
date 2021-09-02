@@ -17,7 +17,7 @@ model = dict(
         n_classes=10,
         n_channels=128,
         n_convs=0,
-        n_reg_outs=7,
+        n_reg_outs=8,
         voxel_size=voxel_size,
         loss_bbox=dict(type='IoU3DLoss', loss_weight=1.0),
         assigner=dict(
