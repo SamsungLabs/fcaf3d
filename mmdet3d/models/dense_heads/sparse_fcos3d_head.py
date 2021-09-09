@@ -253,6 +253,7 @@ class ScanNetSparseFcos3DHead(SparseFcos3DHead):
             bbox_pred[:, 2] + bbox_pred[:, 3],
             bbox_pred[:, 4] + bbox_pred[:, 5],
         ], -1)
+
     @staticmethod
     def _aligned_bbox_to_limits(bbox):
         # x, y, z, w, l, h ->
@@ -369,6 +370,85 @@ class ScanNetFcos3dAssigner(BaseAssigner):
 
         labels = gt_labels[min_area_inds]
         labels = torch.where(min_area == float_max, torch.ones_like(labels) * -1, labels)
+        bbox_targets = bbox_targets[range(n_points), min_area_inds]
+        centerness_targets = compute_centerness(bbox_targets)
+
+        return centerness_targets, gt_bboxes[range(n_points), min_area_inds], labels
+
+
+@BBOX_ASSIGNERS.register_module()
+class ScanNetLimitedAssigner(BaseAssigner):
+    def __init__(self, limit, topk, n_scales):
+        self.limit = limit
+        self.topk = topk
+        self.n_scales = n_scales
+
+    def assign(self, points, gt_bboxes, gt_labels):
+        float_max = 1e8
+        # expand scales to align with points
+        expanded_scales = [
+            points[i].new_tensor(i).expand(len(points[i]))
+            for i in range(len(points))
+        ]
+        points = torch.cat(points, dim=0)
+        scales = torch.cat(expanded_scales, dim=0)
+
+        # below is based on FCOSHead._get_target_single
+        n_points = len(points)
+        n_boxes = len(gt_bboxes)
+        volumes = gt_bboxes.volume.to(points.device)
+        volumes = volumes.expand(n_points, n_boxes).contiguous()
+        gt_bboxes = torch.cat((gt_bboxes.gravity_center, gt_bboxes.dims), dim=1)
+        gt_bboxes = gt_bboxes.to(points.device).expand(n_points, n_boxes, 6)
+        xs, ys, zs = points[:, 0], points[:, 1], points[:, 2]
+        xs = torch.unsqueeze(xs, 1).expand(n_points, n_boxes)
+        ys = torch.unsqueeze(ys, 1).expand(n_points, n_boxes)
+        zs = torch.unsqueeze(zs, 1).expand(n_points, n_boxes)
+
+        dx_min = xs - gt_bboxes[..., 0] + gt_bboxes[..., 3] / 2
+        dx_max = gt_bboxes[..., 0] + gt_bboxes[..., 3] / 2 - xs
+        dy_min = ys - gt_bboxes[..., 1] + gt_bboxes[..., 4] / 2
+        dy_max = gt_bboxes[..., 1] + gt_bboxes[..., 4] / 2 - ys
+        dz_min = zs - gt_bboxes[..., 2] + gt_bboxes[..., 5] / 2
+        dz_max = gt_bboxes[..., 2] + gt_bboxes[..., 5] / 2 - zs
+        bbox_targets = torch.stack((dx_min, dx_max, dy_min, dy_max, dz_min, dz_max), dim=-1)
+
+        # condition1: inside a gt bbox
+        inside_gt_bbox_mask = bbox_targets.min(-1)[0] > 0
+
+        # condition2: positive points per scale >= limit
+        # calculate positive points per scale
+        n_pos_points_per_scale = []
+        for i in range(self.n_scales):
+            n_pos_points_per_scale.append(torch.sum(inside_gt_bbox_mask[scales == i], dim=0))
+        # find best scale
+        n_pos_points_per_scale = torch.stack(n_pos_points_per_scale, dim=0)
+        lower_limit_mask = n_pos_points_per_scale < self.limit
+        lower_index = torch.argmax(lower_limit_mask.int(), dim=0) - 1
+        lower_index = torch.where(lower_index < 0, 0, lower_index)
+        all_upper_limit_mask = torch.all(torch.logical_not(lower_limit_mask), dim=0)
+        best_scale = torch.where(all_upper_limit_mask, self.n_scales - 1, lower_index)
+        # keep only points with best scale
+        best_scale = torch.unsqueeze(best_scale, 0).expand(n_points, n_boxes)
+        scales = torch.unsqueeze(scales, 1).expand(n_points, n_boxes)
+        inside_best_scale_mask = best_scale == scales
+
+        # condition3: limit topk locations per box by centerness
+        centerness = compute_centerness(bbox_targets)
+        centerness = torch.where(inside_gt_bbox_mask, centerness, torch.ones_like(centerness) * -1)
+        centerness = torch.where(inside_best_scale_mask, centerness, torch.ones_like(centerness) * -1)
+        top_centerness = torch.topk(centerness, self.topk + 1, dim=0).values[-1]
+        inside_top_centerness_mask = centerness > top_centerness.unsqueeze(0)
+
+        # if there are still more than one objects for a location,
+        # we choose the one with minimal area
+        volumes = torch.where(inside_gt_bbox_mask, volumes, torch.ones_like(volumes) * float_max)
+        volumes = torch.where(inside_best_scale_mask, volumes, torch.ones_like(volumes) * float_max)
+        volumes = torch.where(inside_top_centerness_mask, volumes, torch.ones_like(volumes) * float_max)
+        min_area, min_area_inds = volumes.min(dim=1)
+
+        labels = gt_labels[min_area_inds]
+        labels = torch.where(min_area == float_max, -1, labels)
         bbox_targets = bbox_targets[range(n_points), min_area_inds]
         centerness_targets = compute_centerness(bbox_targets)
 
@@ -516,6 +596,88 @@ class SunRgbdFcos3dAssigner(BaseAssigner):
 
         labels = gt_labels[min_area_inds]
         labels = torch.where(min_area == float_max, torch.ones_like(labels) * -1, labels)
+        bbox_targets = bbox_targets[range(n_points), min_area_inds]
+        centerness_targets = compute_centerness(bbox_targets)
+
+        return centerness_targets, gt_bboxes[range(n_points), min_area_inds], labels
+
+
+@BBOX_ASSIGNERS.register_module()
+class SunRgbdLimitedAssigner(BaseAssigner):
+    def __init__(self, limit, topk, n_scales):
+        self.limit = limit
+        self.topk = topk
+        self.n_scales = n_scales
+
+    def assign(self, points, gt_bboxes, gt_labels):
+        float_max = 1e8
+        # expand scales to align with points
+        expanded_scales = [
+            points[i].new_tensor(i).expand(len(points[i]))
+            for i in range(len(points))
+        ]
+        points = torch.cat(points, dim=0)
+        scales = torch.cat(expanded_scales, dim=0)
+
+        # below is based on FCOSHead._get_target_single
+        n_points = len(points)
+        n_boxes = len(gt_bboxes)
+        volumes = gt_bboxes.volume.to(points.device)
+        volumes = volumes.expand(n_points, n_boxes).contiguous()
+        gt_bboxes = torch.cat((gt_bboxes.gravity_center, gt_bboxes.tensor[:, 3:]), dim=1)
+        gt_bboxes = gt_bboxes.to(points.device).expand(n_points, n_boxes, 7)
+        expanded_points = points.unsqueeze(1).expand(n_points, n_boxes, 3)
+        shift = torch.stack((
+            expanded_points[..., 0] - gt_bboxes[..., 0],
+            expanded_points[..., 1] - gt_bboxes[..., 1],
+            expanded_points[..., 2] - gt_bboxes[..., 2]
+        ), dim=-1).permute(1, 0, 2)
+        shift = rotation_3d_in_axis(shift, -gt_bboxes[0, :, 6], axis=2).permute(1, 0, 2)
+        centers = gt_bboxes[..., :3] + shift
+        dx_min = centers[..., 0] - gt_bboxes[..., 0] + gt_bboxes[..., 3] / 2
+        dx_max = gt_bboxes[..., 0] + gt_bboxes[..., 3] / 2 - centers[..., 0]
+        dy_min = centers[..., 1] - gt_bboxes[..., 1] + gt_bboxes[..., 4] / 2
+        dy_max = gt_bboxes[..., 1] + gt_bboxes[..., 4] / 2 - centers[..., 1]
+        dz_min = centers[..., 2] - gt_bboxes[..., 2] + gt_bboxes[..., 5] / 2
+        dz_max = gt_bboxes[..., 2] + gt_bboxes[..., 5] / 2 - centers[..., 2]
+        bbox_targets = torch.stack((dx_min, dx_max, dy_min, dy_max, dz_min, dz_max, gt_bboxes[..., 6]), dim=-1)
+
+        # condition1: inside a gt bbox
+        inside_gt_bbox_mask = bbox_targets[..., :6].min(-1)[0] > 0  # skip angle
+
+        # condition2: positive points per scale >= limit
+        # calculate positive points per scale
+        n_pos_points_per_scale = []
+        for i in range(self.n_scales):
+            n_pos_points_per_scale.append(torch.sum(inside_gt_bbox_mask[scales == i], dim=0))
+        # find best scale
+        n_pos_points_per_scale = torch.stack(n_pos_points_per_scale, dim=0)
+        lower_limit_mask = n_pos_points_per_scale < self.limit
+        lower_index = torch.argmax(lower_limit_mask.int(), dim=0) - 1
+        lower_index = torch.where(lower_index < 0, 0, lower_index)
+        all_upper_limit_mask = torch.all(torch.logical_not(lower_limit_mask), dim=0)
+        best_scale = torch.where(all_upper_limit_mask, self.n_scales - 1, lower_index)
+        # keep only points with best scale
+        best_scale = torch.unsqueeze(best_scale, 0).expand(n_points, n_boxes)
+        scales = torch.unsqueeze(scales, 1).expand(n_points, n_boxes)
+        inside_best_scale_mask = best_scale == scales
+
+        # condition3: limit topk locations per box by centerness
+        centerness = compute_centerness(bbox_targets)
+        centerness = torch.where(inside_gt_bbox_mask, centerness, torch.ones_like(centerness) * -1)
+        centerness = torch.where(inside_best_scale_mask, centerness, torch.ones_like(centerness) * -1)
+        top_centerness = torch.topk(centerness, self.topk + 1, dim=0).values[-1]
+        inside_top_centerness_mask = centerness > top_centerness.unsqueeze(0)
+
+        # if there are still more than one objects for a location,
+        # we choose the one with minimal area
+        volumes = torch.where(inside_gt_bbox_mask, volumes, torch.ones_like(volumes) * float_max)
+        volumes = torch.where(inside_best_scale_mask, volumes, torch.ones_like(volumes) * float_max)
+        volumes = torch.where(inside_top_centerness_mask, volumes, torch.ones_like(volumes) * float_max)
+        min_area, min_area_inds = volumes.min(dim=1)
+
+        labels = gt_labels[min_area_inds]
+        labels = torch.where(min_area == float_max, -1, labels)
         bbox_targets = bbox_targets[range(n_points), min_area_inds]
         centerness_targets = compute_centerness(bbox_targets)
 
