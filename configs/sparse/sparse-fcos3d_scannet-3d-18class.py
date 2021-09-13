@@ -11,6 +11,7 @@ model = dict(
         type='MEFPN3D',
         in_channels=(64, 128, 256, 512),
         out_channels=128,
+        pts_threshold=-1,  # todo: ?
         voxel_size=voxel_size),
     bbox_head=dict(
         type='ScanNetSparseFcos3DHead',
@@ -20,9 +21,10 @@ model = dict(
         n_reg_outs=6,
         voxel_size=voxel_size,
         assigner=dict(
-            type='ScanNetFcos3dAssigner',
-            topk=19,
-            regress_ranges=((-1e8, .6), (.4, 1.1), (0.9, 2.1), (1.9, 1e8)))),
+            type='ScanNetLimitedAssigner',
+            limit=27,
+            topk=18,
+            n_scales=4)),
     train_cfg=dict(),
     test_cfg=dict(
         nms_pre=1000,
@@ -44,7 +46,7 @@ train_pipeline = [
         use_dim=[0, 1, 2, 3, 4, 5]),
     dict(type='LoadAnnotations3D'),
     dict(type='GlobalAlignment', rotation_axis=2),
-    dict(type='IndoorPointSample', num_points=40000),
+    dict(type='IndoorPointSample', num_points=100000),
     dict(
         type='RandomFlip3D',
         sync_2d=False,
@@ -85,7 +87,7 @@ test_pipeline = [
                 sync_2d=False,
                 flip_ratio_bev_horizontal=0.5,
                 flip_ratio_bev_vertical=0.5),
-            # dict(type='IndoorPointSample', num_points=40000),
+            dict(type='IndoorPointSample', num_points=100000),
             dict(
                 type='DefaultFormatBundle3D',
                 class_names=class_names,
