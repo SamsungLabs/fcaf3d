@@ -281,11 +281,14 @@ class ScanNetSparseNeckWithHead(SparseNeckWithHead):
     def forward_single(self, x, scale):
         cls = self.cls_convs(x)
         reg = self.reg_convs(x)
-        scores = self.centerness_conv(reg)
-        centerness = scores.features
+        centerness = self.centerness_conv(reg).features
         bbox_pred = torch.exp(scale(self.reg_conv(reg).features))
-        cls_score = self.cls_conv(cls).features
-
+        scores = self.cls_conv(cls)
+        cls_score = scores.features
+        scores = ME.SparseTensor(
+            scores.features.max(dim=1, keepdim=True).values,
+            coordinate_map_key=scores.coordinate_map_key,
+            coordinate_manager=scores.coordinate_manager)
         centernesses, bbox_preds, cls_scores, points = [], [], [], []
         for permutation in x.decomposition_permutations:
             centernesses.append(centerness[permutation])
