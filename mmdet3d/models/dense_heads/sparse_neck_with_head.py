@@ -175,7 +175,8 @@ class SparseNeckWithHead(nn.Module):
                      gt_bboxes,
                      gt_labels,
                      img_meta):
-        centerness_targets, bbox_targets, labels = self.assigner.assign(points, gt_bboxes, gt_labels)
+        with torch.no_grad():
+            centerness_targets, bbox_targets, labels = self.assigner.assign(points, gt_bboxes, gt_labels)
 
         centerness = torch.cat(centernesses)
         bbox_preds = torch.cat(bbox_preds)
