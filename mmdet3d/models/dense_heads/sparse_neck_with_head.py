@@ -122,7 +122,7 @@ class SparseNeckWithHead(nn.Module):
             return x
 
         with torch.no_grad():
-            coordinates = torch.cat([x.C[:, :1], x.C[:, 1:] / 2.], dim=1)  # todo: /2??????
+            coordinates = x.C.float()  # todo: [:, 1:] / 2 ?
             interpolated_scores = scores.features_at_coordinates(coordinates)
             prune_mask = interpolated_scores.new_zeros((len(interpolated_scores)), dtype=torch.bool)
             for permutation in x.decomposition_permutations:
