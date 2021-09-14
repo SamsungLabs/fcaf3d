@@ -359,13 +359,17 @@ class SunRgbdSparseNeckWithHead(SparseNeckWithHead):
     def forward_single(self, x, scale):
         cls = self.cls_convs(x)
         reg = self.reg_convs(x)
-        scores = self.centerness_conv(reg)
-        centerness = scores.features
+        centerness = self.centerness_conv(reg).features
+        scores = self.cls_conv(cls)
+        cls_score = scores.features
+        scores = ME.SparseTensor(
+            scores.features.max(dim=1, keepdim=True).values,
+            coordinate_map_key=scores.coordinate_map_key,
+            coordinate_manager=scores.coordinate_manager)
         reg_final = self.reg_conv(reg).features
         reg_distance = torch.exp(scale(reg_final[:, :6]))
         reg_angle = reg_final[:, 6:]
         bbox_pred = torch.cat((reg_distance, reg_angle), dim=1)
-        cls_score = self.cls_conv(cls).features
 
         centernesses, bbox_preds, cls_scores, points = [], [], [], []
         for permutation in x.decomposition_permutations:
