@@ -285,7 +285,7 @@ class ScanNetSparseNeckWithHead(SparseNeckWithHead):
         bbox_pred = torch.exp(scale(self.reg_conv(reg).features))
         scores = self.cls_conv(cls)
         cls_score = scores.features
-        scores = ME.SparseTensor(
+        prune_scores = ME.SparseTensor(
             scores.features.max(dim=1, keepdim=True).values,
             coordinate_map_key=scores.coordinate_map_key,
             coordinate_manager=scores.coordinate_manager)
@@ -300,7 +300,7 @@ class ScanNetSparseNeckWithHead(SparseNeckWithHead):
             # todo: do we need + .5?
             points[i] = points[i] * self.voxel_size
 
-        return centernesses, bbox_preds, cls_scores, points, scores
+        return centernesses, bbox_preds, cls_scores, points, prune_scores
 
     @staticmethod
     def _bbox_pred_to_bbox(points, bbox_pred):
@@ -362,7 +362,7 @@ class SunRgbdSparseNeckWithHead(SparseNeckWithHead):
         centerness = self.centerness_conv(reg).features
         scores = self.cls_conv(cls)
         cls_score = scores.features
-        scores = ME.SparseTensor(
+        prune_scores = ME.SparseTensor(
             scores.features.max(dim=1, keepdim=True).values,
             coordinate_map_key=scores.coordinate_map_key,
             coordinate_manager=scores.coordinate_manager)
@@ -381,7 +381,7 @@ class SunRgbdSparseNeckWithHead(SparseNeckWithHead):
         for i in range(len(points)):
             points[i] = points[i] * self.voxel_size
 
-        return centernesses, bbox_preds, cls_scores, points, scores
+        return centernesses, bbox_preds, cls_scores, points, prune_scores
 
     @staticmethod
     def _bbox_pred_to_bbox(points, bbox_pred):
