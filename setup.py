@@ -197,6 +197,15 @@ if __name__ == '__main__':
                     'src/iou3d_kernel.cu',
                 ]),
             make_cuda_ext(
+                name='pcdet_nms',
+                module='mmdet3d.ops.pcdet_nms',
+                sources=[
+                    'src/iou3d_cpu.cpp',
+                    'src/iou3d_nms_api.cpp',
+                    'src/iou3d_nms.cpp',
+                    'src/iou3d_nms_kernel.cu',
+                ]),
+            make_cuda_ext(
                 name='voxel_layer',
                 module='mmdet3d.ops.voxel',
                 sources=[
