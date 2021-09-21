@@ -1,4 +1,3 @@
-import numpy as np
 import torch
 from mmcv.runner import BaseModule, force_fp32
 from torch.nn import functional as F
@@ -8,7 +7,7 @@ from mmdet3d.models.builder import build_loss
 from mmdet3d.models.losses import chamfer_distance
 from mmdet3d.models.model_utils import VoteModule
 from mmdet3d.ops import build_sa_module, furthest_point_sample
-from mmdet.core import build_bbox_coder, multi_apply
+from mmdet.core import multi_apply
 from mmdet.models import HEADS
 from .base_conv_bbox_head import BaseConvBboxHead
 
@@ -48,8 +47,8 @@ class VoteHeadV2(BaseModule):
                  conv_cfg=dict(type='Conv1d'),
                  norm_cfg=dict(type='BN1d'),
                  objectness_loss=None,
-                 center_loss=None,  # todo: do we need it?
-                 semantic_loss=None,  # todo: do we need it?
+                 center_loss=None,
+                 semantic_loss=None,
                  iou_loss=None,
                  init_cfg=None):
         super(VoteHeadV2, self).__init__(init_cfg=init_cfg)
@@ -193,9 +192,10 @@ class VoteHeadV2(BaseModule):
         results['obj_scores'] = cls_preds_trans[..., :2]
         results['sem_scores'] = cls_preds_trans[..., 2:]
 
+        bbox_pred = reg_predictions.transpose(2, 1)
+        # todo: move to separate function
         # dx, dy, dz, scale, h, sin(2a)ln(q), cos(2a)ln(q) ->
         # x_center, y_center, z_center, w, l, h, alpha
-        bbox_pred = reg_predictions.transpose(2, 1)
         scale = torch.exp(bbox_pred[..., 3])
         q = torch.exp(torch.sqrt(torch.pow(bbox_pred[..., 5], 2) + torch.pow(bbox_pred[..., 6], 2)))
         alpha = 0.5 * torch.atan2(bbox_pred[..., 5], bbox_pred[..., 6])
@@ -208,7 +208,6 @@ class VoteHeadV2(BaseModule):
             torch.exp(bbox_pred[..., 4]),
             alpha
         ), dim=-1)
-
         return results
 
     @force_fp32(apply_to=('bbox_preds', ))
@@ -222,14 +221,6 @@ class VoteHeadV2(BaseModule):
              img_metas=None,
              gt_bboxes_ignore=None,
              ret_target=False):
-        # for k in bbox_preds:
-        #     print('bbox_preds', k, bbox_preds[k].shape)
-        # for p in points:
-        #     print('points', p.shape)
-        # for g in gt_bboxes_3d:
-        #     print('gt_bboxes_3d', g.tensor.shape)
-        # for g in gt_labels_3d:
-        #     print('gt_labels_3d', g.shape)
         """Compute loss.
 
         Args:
@@ -253,7 +244,7 @@ class VoteHeadV2(BaseModule):
         targets = self.get_targets(points, gt_bboxes_3d, gt_labels_3d,
                                    pts_semantic_mask, pts_instance_mask,
                                    bbox_preds)
-        (vote_targets, vote_target_masks, bbox_targets, mask_targets, valid_gt_masks,
+        (vote_targets, vote_target_masks, center_targets, bbox_targets, mask_targets, valid_gt_masks,
          objectness_targets, objectness_weights, box_loss_weights,
          valid_gt_weights) = targets
 
@@ -270,12 +261,12 @@ class VoteHeadV2(BaseModule):
             weight=objectness_weights)
 
         # calculate center loss
-        # source2target_loss, target2source_loss = self.center_loss(
-        #     bbox_preds['center'],
-        #     center_targets,
-        #     src_weight=box_loss_weights,
-        #     dst_weight=valid_gt_weights)
-        # center_loss = source2target_loss + target2source_loss
+        source2target_loss, target2source_loss = self.center_loss(
+            bbox_preds['bbox_preds'][..., :3],
+            center_targets,
+            src_weight=box_loss_weights,
+            dst_weight=valid_gt_weights)
+        center_loss = source2target_loss + target2source_loss
 
         # calculate direction class loss
         # dir_class_loss = self.dir_class_loss(
@@ -331,6 +322,7 @@ class VoteHeadV2(BaseModule):
             vote_loss=vote_loss,
             objectness_loss=objectness_loss,
             semantic_loss=semantic_loss,
+            center_loss=center_loss,
             iou_loss=iou_loss)
 
         # if self.iou_loss:
@@ -398,7 +390,7 @@ class VoteHeadV2(BaseModule):
             for i in range(len(gt_labels_3d))
         ]
 
-        (vote_targets, vote_target_masks, bbox_targets,
+        (vote_targets, vote_target_masks, center_targets, bbox_targets,
          mask_targets, objectness_targets, objectness_masks) = multi_apply(
              self.get_targets_single, points,
              gt_bboxes_3d, gt_labels_3d,
@@ -408,13 +400,13 @@ class VoteHeadV2(BaseModule):
         # pad targets as original code of votenet.
         for index in range(len(gt_labels_3d)):
             pad_num = max_gt_num - gt_labels_3d[index].shape[0]
-            # center_targets[index] = F.pad(center_targets[index],
-            #                               (0, 0, 0, pad_num))
+            center_targets[index] = F.pad(center_targets[index],
+                                          (0, 0, 0, pad_num))
             valid_gt_masks[index] = F.pad(valid_gt_masks[index], (0, pad_num))
 
         vote_targets = torch.stack(vote_targets)
         vote_target_masks = torch.stack(vote_target_masks)
-        # center_targets = torch.stack(center_targets)
+        center_targets = torch.stack(center_targets)
         valid_gt_masks = torch.stack(valid_gt_masks)
 
         # assigned_center_targets = torch.stack(assigned_center_targets)
@@ -431,7 +423,7 @@ class VoteHeadV2(BaseModule):
         # size_res_targets = torch.stack(size_res_targets)
         mask_targets = torch.stack(mask_targets)
 
-        return (vote_targets, vote_target_masks, bbox_targets, mask_targets,
+        return (vote_targets, vote_target_masks, center_targets, bbox_targets, mask_targets,
                 valid_gt_masks, objectness_targets, objectness_weights,
                 box_loss_weights, valid_gt_weights)
 
@@ -557,7 +549,7 @@ class VoteHeadV2(BaseModule):
         # assigned_center_targets = center_targets[assignment]
         bbox_targets = torch.cat((center_targets[assignment], gt_bboxes_3d.tensor[assignment, 3:]), dim=-1)
 
-        return (vote_targets, vote_target_masks, bbox_targets,
+        return (vote_targets, vote_target_masks, center_targets, bbox_targets,
                 mask_targets.long(), objectness_targets, objectness_masks)
 
     def get_bboxes(self,

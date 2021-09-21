@@ -46,7 +46,7 @@ model = dict(
                 reduction='sum',
                 loss_src_weight=10.0,
                 loss_dst_weight=10.0),
-            iou_loss=dict(type='IoU3DLoss', reduction='sum', loss_weight=1.0),
+            iou_loss=dict(type='IoU3DLoss', reduction='sum', loss_weight=3.0),
             semantic_loss=dict(
                 type='CrossEntropyLoss', reduction='sum', loss_weight=1.0)),
         joint=dict(
