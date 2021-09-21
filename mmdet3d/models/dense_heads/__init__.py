@@ -10,6 +10,7 @@ from .parta2_rpn_head import PartA2RPNHead
 from .shape_aware_head import ShapeAwareHead
 from .ssd_3d_head import SSD3DHead
 from .vote_head import VoteHead
+from .vote_head_v2 import VoteHeadV2
 from .sparse_fcos3d_head import (
     ScanNetSparseFcos3DHead, ScanNetFcos3dAssigner,
     SunRgbdSparseFcos3DHead, SunRgbdFcos3dAssigner)
