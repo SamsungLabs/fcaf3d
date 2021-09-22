@@ -1,4 +1,5 @@
 voxel_size = .01
+n_points = 100000
 
 model = dict(
     type='SingleStageSparse3DDetectorV2',
@@ -11,7 +12,7 @@ model = dict(
         type='SunRgbdSparseNeckWithHead',
         in_channels=(64, 128, 256, 512),
         out_channels=128,
-        pts_threshold=100000,
+        pts_threshold=n_points,
         n_classes=10,
         n_convs=0,
         n_reg_outs=8,
@@ -25,9 +26,8 @@ model = dict(
     train_cfg=dict(),
     test_cfg=dict(
         nms_pre=1000,
-        nms_thr=.25,
-        use_rotate_nms=True,
-        score_thr=.0))
+        iou_thr=.5,
+        score_thr=.005))
 
 dataset_type = 'SUNRGBDDataset'
 data_root = 'data/sunrgbd/'
@@ -41,7 +41,7 @@ train_pipeline = [
         load_dim=6,
         use_dim=[0, 1, 2, 3, 4, 5]),
     dict(type='LoadAnnotations3D'),
-    dict(type='IndoorPointSample', num_points=100000),
+    dict(type='IndoorPointSample', num_points=n_points),
     dict(
         type='RandomFlip3D',
         sync_2d=False,
@@ -80,7 +80,7 @@ test_pipeline = [
                 sync_2d=False,
                 flip_ratio_bev_horizontal=0.5,
                 flip_ratio_bev_vertical=0.5),
-            dict(type='IndoorPointSample', num_points=100000),
+            dict(type='IndoorPointSample', num_points=n_points),
             dict(
                 type='DefaultFormatBundle3D',
                 class_names=class_names,

@@ -5,7 +5,7 @@ from mmdet.core import reduce_mean, build_assigner
 from mmdet.models.builder import HEADS, build_loss
 from mmcv.cnn import Scale, bias_init_with_prob
 
-from mmdet3d.core.post_processing import aligned_3d_nms, box3d_multiclass_nms
+from mmdet3d.ops.pcdet_nms import pcdet_nms_gpu, pcdet_nms_normal_gpu
 
 
 class SparseNeckWithHead(nn.Module):
@@ -273,7 +273,44 @@ class SparseNeckWithHead(nn.Module):
         raise NotImplementedError
 
     def _nms(self, bboxes, scores, img_meta):
-        raise NotImplementedError
+        n_classes = scores.shape[1]
+        yaw_flag = bboxes.shape[1] == 7
+        nms_bboxes, nms_scores, nms_labels = [], [], []
+        for i in range(n_classes):
+            ids = scores[:, i] > self.test_cfg.score_thr
+            if not ids.any():
+                continue
+
+            class_scores = scores[ids, i]
+            class_bboxes = bboxes[ids]
+            if yaw_flag:
+                nms_function = pcdet_nms_gpu
+            else:
+                class_bboxes = torch.cat((
+                    class_bboxes, torch.zeros_like(class_bboxes[:, :1])), dim=1)
+                nms_function = pcdet_nms_normal_gpu
+
+            nms_ids, _ = nms_function(class_bboxes, class_scores, self.test_cfg.iou_thr)
+            nms_bboxes.append(class_bboxes[nms_ids])
+            nms_scores.append(class_scores[nms_ids])
+            nms_labels.append(bboxes.new_full(class_scores[nms_ids].shape, i, dtype=torch.long))
+
+        if len(nms_bboxes):
+            nms_bboxes = torch.cat(nms_bboxes, dim=0)
+            nms_scores = torch.cat(nms_scores, dim=0)
+            nms_labels = torch.cat(nms_labels, dim=0)
+
+        if yaw_flag:
+            box_dim = 7
+            with_yaw = True
+        else:
+            box_dim = 6
+            with_yaw = False
+            nms_bboxes = nms_bboxes[:, :6]
+        nms_bboxes = img_meta['box_type_3d'](
+            nms_bboxes, box_dim=box_dim, with_yaw=with_yaw, origin=(.5, .5, .5))
+
+        return nms_bboxes, nms_scores, nms_labels
 
 
 @HEADS.register_module()
@@ -331,28 +368,6 @@ class ScanNetSparseNeckWithHead(SparseNeckWithHead):
     def _bbox_to_loss(self, bbox):
         return self._aligned_bbox_to_limits(bbox)
 
-    def _nms(self, bboxes, scores, img_meta):
-        scores, labels = scores.max(dim=1)
-        ids = scores > self.test_cfg.score_thr
-        bboxes = bboxes[ids]
-        scores = scores[ids]
-        labels = labels[ids]
-        bboxes = self._aligned_bbox_to_limits(bboxes)
-        ids = aligned_3d_nms(bboxes, scores, labels, self.test_cfg.iou_thr)
-        bboxes = bboxes[ids]
-        # x_min, y_min, z_min, x_max, y_max, z_max ->
-        # x, y, z, w, l, h
-        bboxes = torch.stack((
-            (bboxes[:, 0] + bboxes[:, 3]) / 2.,
-            (bboxes[:, 1] + bboxes[:, 4]) / 2.,
-            (bboxes[:, 2] + bboxes[:, 5]) / 2.,
-            bboxes[:, 3] - bboxes[:, 0],
-            bboxes[:, 4] - bboxes[:, 1],
-            bboxes[:, 5] - bboxes[:, 2]
-        ), dim=1)
-        bboxes = img_meta['box_type_3d'](bboxes, origin=(.5, .5, .5), box_dim=6, with_yaw=False)
-        return bboxes, scores[ids], labels[ids]
-
 
 @HEADS.register_module()
 class SunRgbdSparseNeckWithHead(SparseNeckWithHead):
@@ -406,27 +421,3 @@ class SunRgbdSparseNeckWithHead(SparseNeckWithHead):
     @staticmethod
     def _bbox_to_loss(bbox):
         return bbox
-
-    def _nms(self, bboxes, scores, img_meta):
-        # Add a dummy background class to the end. Nms needs to be fixed in the future.
-        padding = scores.new_zeros(scores.shape[0], 1)
-        scores = torch.cat([scores, padding], dim=1)
-        # x, y, z, w, l, h, alpha ->
-        # x_min, y_min, x_max, y_max, alpha
-        bboxes_for_nms = torch.stack((
-            bboxes[:, 0] - bboxes[:, 3] / 2,
-            bboxes[:, 1] - bboxes[:, 4] / 2,
-            bboxes[:, 0] + bboxes[:, 3] / 2,
-            bboxes[:, 1] + bboxes[:, 4] / 2,
-            bboxes[:, 6]
-        ), dim=1)
-        bboxes, scores, labels = box3d_multiclass_nms(
-            mlvl_bboxes=bboxes,
-            mlvl_bboxes_for_nms=bboxes_for_nms,
-            mlvl_scores=scores,
-            score_thr=self.test_cfg.score_thr,
-            max_num=self.test_cfg.nms_pre,
-            cfg=self.test_cfg
-        )
-        bboxes = img_meta['box_type_3d'](bboxes, origin=(.5, .5, .5))
-        return bboxes, scores, labels
