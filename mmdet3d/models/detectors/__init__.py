@@ -14,7 +14,6 @@ from .ssd3dnet import SSD3DNet
 from .votenet import VoteNet
 from .voxelnet import VoxelNet
 from .single_stage_sparse import SingleStageSparse3DDetector
-from .single_stage_sparse_v2 import SingleStageSparse3DDetectorV2
 
 __all__ = [
     'Base3DDetector', 'VoxelNet', 'DynamicVoxelNet', 'MVXTwoStageDetector',

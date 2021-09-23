@@ -2,14 +2,14 @@ voxel_size = .01
 n_points = 100000
 
 model = dict(
-    type='SingleStageSparse3DDetectorV2',
+    type='SingleStageSparse3DDetector',
     voxel_size=voxel_size,
     backbone=dict(
         type='MEResNet3D',
         in_channels=3,
         depth=34),
     neck_with_head=dict(
-        type='SunRgbdSparseNeckWithHead',
+        type='SunRgbdSparseFcos3DNeckWithHead',
         in_channels=(64, 128, 256, 512),
         out_channels=128,
         pts_threshold=n_points,

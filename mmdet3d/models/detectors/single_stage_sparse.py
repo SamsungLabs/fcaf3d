@@ -1,8 +1,8 @@
 import MinkowskiEngine as ME
 
 from mmdet.models import DETECTORS
-from mmdet3d.models import build_backbone, build_neck, build_head
-from mmdet3d.core import bbox3d2result, merge_aug_bboxes_3d
+from mmdet3d.models import build_backbone, build_head
+from mmdet3d.core import bbox3d2result
 from .base import Base3DDetector
 
 
@@ -10,18 +10,16 @@ from .base import Base3DDetector
 class SingleStageSparse3DDetector(Base3DDetector):
     def __init__(self,
                  backbone,
-                 neck,
-                 bbox_head,
+                 neck_with_head,
                  voxel_size,
                  pretrained=False,
                  train_cfg=None,
                  test_cfg=None):
-        super().__init__()
+        super(SingleStageSparse3DDetector, self).__init__()
         self.backbone = build_backbone(backbone)
-        self.neck = build_neck(neck)
-        bbox_head.update(train_cfg=train_cfg)
-        bbox_head.update(test_cfg=test_cfg)
-        self.bbox_head = build_head(bbox_head)
+        neck_with_head.update(train_cfg=train_cfg)
+        neck_with_head.update(test_cfg=test_cfg)
+        self.neck_with_head = build_head(neck_with_head)
         self.voxel_size = voxel_size
         self.train_cfg = train_cfg
         self.test_cfg = test_cfg
@@ -29,8 +27,7 @@ class SingleStageSparse3DDetector(Base3DDetector):
 
     def init_weights(self, pretrained=None):
         self.backbone.init_weights()
-        self.neck.init_weights()
-        self.bbox_head.init_weights()
+        self.neck_with_head.init_weights()
 
     def extract_feat(self, points, img_metas):
         """Extract features from points."""
@@ -39,6 +36,7 @@ class SingleStageSparse3DDetector(Base3DDetector):
             device=points[0].device)
         x = ME.SparseTensor(coordinates=coordinates, features=features)
         x = self.backbone(x)
+        x = self.neck_with_head(x)
         return x
 
     def forward_train(self,
@@ -47,20 +45,13 @@ class SingleStageSparse3DDetector(Base3DDetector):
                       gt_labels_3d,
                       img_metas):
         x = self.extract_feat(points, img_metas)
-        x, auxiliary_losses = self.neck(x, gt_bboxes_3d, gt_labels_3d, img_metas)
-        outs = self.bbox_head(x)
-        loss_inputs = outs + (gt_bboxes_3d, gt_labels_3d, img_metas)
-        losses = self.bbox_head.loss(*loss_inputs)
-        losses.update(auxiliary_losses)
+        losses = self.neck_with_head.loss(*x, gt_bboxes_3d, gt_labels_3d, img_metas)
         return losses
 
     def simple_test(self, points, img_metas, imgs=None, rescale=False):
         """Test function without augmentaiton."""
         x = self.extract_feat(points, img_metas)
-        x = self.neck(x, img_metas=img_metas)
-        outs = self.bbox_head(x)
-        bbox_list = self.bbox_head.get_bboxes(
-            *outs, img_metas, rescale=rescale)
+        bbox_list = self.neck_with_head.get_bboxes(*x, img_metas, rescale=rescale)
         bbox_results = [
             bbox3d2result(bboxes, scores, labels)
             for bboxes, scores, labels in bbox_list
@@ -68,23 +59,4 @@ class SingleStageSparse3DDetector(Base3DDetector):
         return bbox_results
 
     def aug_test(self, points, img_metas, imgs=None, rescale=False):
-        """Test function with augmentaiton."""
-        feats = self.extract_feats(points, img_metas)
-
-        # only support aug_test for one sample
-        aug_bboxes = []
-        for x, img_meta in zip(feats, img_metas):
-            outs = self.bbox_head(x)
-            bbox_list = self.bbox_head.get_bboxes(
-                *outs, img_meta, rescale=rescale)
-            bbox_list = [
-                dict(boxes_3d=bboxes, scores_3d=scores, labels_3d=labels)
-                for bboxes, scores, labels in bbox_list
-            ]
-            aug_bboxes.append(bbox_list[0])
-
-        # after merging, bboxes will be rescaled to the original image size
-        merged_bboxes = merge_aug_bboxes_3d(aug_bboxes, img_metas,
-                                            self.bbox_head.test_cfg)
-
-        return [merged_bboxes]
+        pass
