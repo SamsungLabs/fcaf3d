@@ -3,7 +3,7 @@ from torch import nn
 import MinkowskiEngine as ME
 from mmdet.core import reduce_mean, build_assigner
 from mmdet.models.builder import HEADS, build_loss
-from mmcv.cnn import bias_init_with_prob
+from mmcv.cnn import Scale, bias_init_with_prob
 
 from mmdet3d.ops.pcdet_nms import pcdet_nms_gpu, pcdet_nms_normal_gpu
 
@@ -68,14 +68,14 @@ class SparseFcaf3DNeckWithHead(nn.Module):
             if i > 0:
                 self.__setattr__(f'up_block_{i}', self._make_up_block(in_channels[i], in_channels[i - 1]))
             self.__setattr__(f'out_block_{i}', self._make_block(in_channels[i], out_channels))
-            self.__setattr__(f'reg_conv_{i}', ME.MinkowskiConvolution(out_channels, n_reg_outs, kernel_size=1, dimension=3))
-            self.__setattr__(f'cls_conv_{i}', ME.MinkowskiConvolution(out_channels, n_classes, kernel_size=1, bias=True, dimension=3))
+            self.__setattr__(f'scale_{i}', Scale(1.))
+        self.reg_conv = ME.MinkowskiConvolution(out_channels, n_reg_outs, kernel_size=1, dimension=3)
+        self.cls_conv = ME.MinkowskiConvolution(out_channels, n_classes, kernel_size=1, bias=True, dimension=3)
 
     def init_weights(self):
-        for i in range(self.n_scales):
-            nn.init.normal_(self.__getattr__(f'reg_conv_{i}').kernel, std=.01)
-            nn.init.normal_(self.__getattr__(f'cls_conv_{i}').kernel, std=.01)
-            nn.init.constant_(self.__getattr__(f'cls_conv_{i}').bias, bias_init_with_prob(.01))
+        nn.init.normal_(self.reg_conv.kernel, std=.01)
+        nn.init.normal_(self.cls_conv.kernel, std=.01)
+        nn.init.constant_(self.cls_conv.bias, bias_init_with_prob(.01))
 
     def forward(self, x):
         outs = []
@@ -275,8 +275,8 @@ class SparseFcaf3DNeckWithHead(nn.Module):
 @HEADS.register_module()
 class ScanNetSparseFcaf3DNeckWithHead(SparseFcaf3DNeckWithHead):
     def forward_single(self, x, i):
-        bbox_pred = torch.exp(self.__getattr__(f'reg_conv_{i}')(x).features)
-        scores = self.__getattr__(f'cls_conv_{i}')(x)
+        bbox_pred = torch.exp(self.__getattr__(f'scale_{i}')(self.reg_conv(x).features))
+        scores = self.cls_conv(x)
         cls_score = scores.features
         prune_scores = ME.SparseTensor(
             scores.features.max(dim=1, keepdim=True).values,
@@ -326,14 +326,14 @@ class ScanNetSparseFcaf3DNeckWithHead(SparseFcaf3DNeckWithHead):
 @HEADS.register_module()
 class SunRgbdSparseFcaf3DNeckWithHead(SparseFcaf3DNeckWithHead):
     def forward_single(self, x, i):
-        scores = self.__getattr__(f'cls_conv_{i}')(x)
+        scores = self.cls_conv(x)
         cls_score = scores.features
         prune_scores = ME.SparseTensor(
             scores.features.max(dim=1, keepdim=True).values,
             coordinate_map_key=scores.coordinate_map_key,
             coordinate_manager=scores.coordinate_manager)
-        reg_final = self.__getattr__(f'reg_conv_{i}')(x).features
-        reg_distance = torch.exp(reg_final[:, :6])
+        reg_final = self.reg_conv(x).features
+        reg_distance = torch.exp(self.__getattr__(f'scale_{i}')(reg_final[:, :6]))
         reg_angle = reg_final[:, 6:]
         bbox_pred = torch.cat((reg_distance, reg_angle), dim=1)
 
