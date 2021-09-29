@@ -11,14 +11,12 @@ from .shape_aware_head import ShapeAwareHead
 from .ssd_3d_head import SSD3DHead
 from .vote_head import VoteHead
 from .vote_head_v2 import VoteHeadV2
-from .sparse_fcos3d_head import (
-    ScanNetSparseFcos3DHead, ScanNetFcos3dAssigner,
-    SunRgbdSparseFcos3DHead, SunRgbdFcos3dAssigner)
-from .sparse_neck_with_head import (
-    ScanNetSparseNeckWithHead, SunRgbdSparseNeckWithHead)
-from .sparse_yolo3d_head import (
-    ScanNetSparseYolo3DHead, ScanNetYolo3dAssigner,
-    SunRgbdSparseYolo3DHead, SunRgbdYolo3dAssigner
+from .sparse_fcos3d_neck_with_head import (
+    ScanNetSparseFcos3DNeckWithHead, SunRgbdSparseFcos3DNeckWithHead,
+    ScanNetFcos3dAssigner, SunRgbdFcos3dAssigner,
+    ScanNetLimitedAssigner, SunRgbdLimitedAssigner)
+from .sparse_fcaf3d_neck_with_head import (
+    ScanNetSparseFcaf3DNeckWithHead, SunRgbdSparseFcaf3DNeckWithHead
 )
 
 __all__ = [

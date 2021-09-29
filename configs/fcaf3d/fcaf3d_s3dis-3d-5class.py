@@ -2,18 +2,18 @@ voxel_size = .01
 n_points = 100000
 
 model = dict(
-    type='SingleStageSparse3DDetectorV2',
+    type='SingleStageSparse3DDetector',
     voxel_size=voxel_size,
     backbone=dict(
         type='MEResNet3D',
         in_channels=3,
         depth=34),
     neck_with_head=dict(
-        type='ScanNetSparseNeckWithHead',
+        type='ScanNetSparseFcos3DNeckWithHead',
         in_channels=(64, 128, 256, 512),
         out_channels=128,
         pts_threshold=n_points,
-        n_classes=18,
+        n_classes=5,
         n_convs=0,
         n_reg_outs=6,
         voxel_size=voxel_size,
@@ -22,18 +22,19 @@ model = dict(
             limit=27,
             topk=18,
             n_scales=4)),
+
     train_cfg=dict(),
     test_cfg=dict(
         nms_pre=1000,
         iou_thr=.5,
-        score_thr=.005))
+        score_thr=.01))
 
-dataset_type = 'ScanNetDataset'
-data_root = './data/scannet/'
-class_names = ('cabinet', 'bed', 'chair', 'sofa', 'table', 'door', 'window',
-               'bookshelf', 'picture', 'counter', 'desk', 'curtain',
-               'refrigerator', 'showercurtrain', 'toilet', 'sink', 'bathtub',
-               'garbagebin')
+dataset_type = 'S3DISDataset'
+data_root = './data/s3dis/'
+class_names = ('table', 'chair', 'sofa', 'bookcase', 'board')
+train_area = [1, 2, 3, 4, 6]
+test_area = 5
+
 train_pipeline = [
     dict(
         type='LoadPointsFromFile',
@@ -42,7 +43,6 @@ train_pipeline = [
         load_dim=6,
         use_dim=[0, 1, 2, 3, 4, 5]),
     dict(type='LoadAnnotations3D'),
-    dict(type='GlobalAlignment', rotation_axis=2),
     dict(type='IndoorPointSample', num_points=n_points),
     dict(
         type='RandomFlip3D',
@@ -67,7 +67,6 @@ test_pipeline = [
         shift_height=False,
         load_dim=6,
         use_dim=[0, 1, 2, 3, 4, 5]),
-    dict(type='GlobalAlignment', rotation_axis=2),
     dict(
         type='MultiScaleFlipAug3D',
         img_scale=(1333, 800),
@@ -99,17 +98,22 @@ data = dict(
         type='RepeatDataset',
         times=10,
         dataset=dict(
-            type=dataset_type,
-            data_root=data_root,
-            ann_file=data_root + 'scannet_infos_train.pkl',
-            pipeline=train_pipeline,
-            filter_empty_gt=True,
-            classes=class_names,
-            box_type_3d='Depth')),
+            type='ConcatDataset',
+            datasets=[
+                dict(
+                    type=dataset_type,
+                    data_root=data_root,
+                    ann_file=data_root + f's3dis_infos_Area_{i}.pkl',
+                    pipeline=train_pipeline,
+                    filter_empty_gt=True,
+                    classes=class_names,
+                    box_type_3d='Depth') for i in train_area
+            ],
+            separate_eval=False)),
     val=dict(
         type=dataset_type,
         data_root=data_root,
-        ann_file=data_root + 'scannet_infos_val.pkl',
+        ann_file=data_root + f's3dis_infos_Area_{test_area}.pkl',
         pipeline=test_pipeline,
         classes=class_names,
         test_mode=True,
@@ -117,7 +121,7 @@ data = dict(
     test=dict(
         type=dataset_type,
         data_root=data_root,
-        ann_file=data_root + 'scannet_infos_val.pkl',
+        ann_file=data_root + f's3dis_infos_Area_{test_area}.pkl',
         pipeline=test_pipeline,
         classes=class_names,
         test_mode=True,

@@ -8,20 +8,15 @@ from mmcv.cnn import Scale, bias_init_with_prob
 from mmdet3d.ops.pcdet_nms import pcdet_nms_gpu, pcdet_nms_normal_gpu
 
 
-class SparseNeckWithHead(nn.Module):
+class SparseFcaf3DNeckWithHead(nn.Module):
     def __init__(self,
                  n_classes,
                  in_channels,
                  out_channels,
-                 n_convs,
                  n_reg_outs,
                  voxel_size,
                  pts_threshold,
                  assigner,
-                 loss_centerness=dict(
-                     type='CrossEntropyLoss',
-                     use_sigmoid=True,
-                     loss_weight=1.0),
                  loss_bbox=dict(type='AxisAlignedIoULoss', loss_weight=1.0),
                  loss_cls=dict(
                      type='FocalLoss',
@@ -31,16 +26,16 @@ class SparseNeckWithHead(nn.Module):
                      loss_weight=1.0),
                  train_cfg=None,
                  test_cfg=None):
-        super().__init__()
+        super(SparseFcaf3DNeckWithHead, self).__init__()
+        self.n_scales = len(in_channels)
         self.voxel_size = voxel_size
         self.assigner = build_assigner(assigner)
-        self.loss_centerness = build_loss(loss_centerness)
         self.loss_bbox = build_loss(loss_bbox)
         self.loss_cls = build_loss(loss_cls)
         self.train_cfg = train_cfg
         self.test_cfg = test_cfg
         self.pts_threshold = pts_threshold
-        self._init_layers(in_channels, out_channels, n_convs, n_reg_outs, n_classes)
+        self._init_layers(in_channels, out_channels, n_reg_outs, n_classes)
 
     @staticmethod
     def _make_block(in_channels, out_channels):
@@ -67,36 +62,17 @@ class SparseNeckWithHead(nn.Module):
             ME.MinkowskiELU()
         )
 
-    def _init_layers(self, in_channels, out_channels, n_convs, n_reg_outs, n_classes):
-        # neck layers
+    def _init_layers(self, in_channels, out_channels, n_reg_outs, n_classes):
         self.pruning = ME.MinkowskiPruning()
-        for i in range(len(in_channels)):
+        for i in range(self.n_scales):
             if i > 0:
                 self.__setattr__(f'up_block_{i}', self._make_up_block(in_channels[i], in_channels[i - 1]))
             self.__setattr__(f'out_block_{i}', self._make_block(in_channels[i], out_channels))
-
-        # head layers
-        self.cls_convs = nn.Sequential(*[
-            self._make_block(out_channels, out_channels)
-            for _ in range(n_convs)
-        ])
-        self.reg_convs = nn.Sequential(*[
-            self._make_block(out_channels, out_channels)
-            for _ in range(n_convs)
-        ])
-        self.centerness_conv = ME.MinkowskiConvolution(out_channels, 1, kernel_size=1, dimension=3)
+            self.__setattr__(f'scale_{i}', Scale(1.))
         self.reg_conv = ME.MinkowskiConvolution(out_channels, n_reg_outs, kernel_size=1, dimension=3)
         self.cls_conv = ME.MinkowskiConvolution(out_channels, n_classes, kernel_size=1, bias=True, dimension=3)
-        self.scales = nn.ModuleList([Scale(1.) for _ in range(len(in_channels))])
 
     def init_weights(self):
-        for module in self.cls_convs.modules():
-            if type(module) == ME.MinkowskiConvolution:
-                nn.init.normal_(module.kernel, std=.01)
-        for module in self.reg_convs.modules():
-            if type(module) == ME.MinkowskiConvolution:
-                nn.init.normal_(module.kernel, std=.01)
-        nn.init.normal_(self.centerness_conv.kernel, std=.01)
         nn.init.normal_(self.reg_conv.kernel, std=.01)
         nn.init.normal_(self.cls_conv.kernel, std=.01)
         nn.init.constant_(self.cls_conv.bias, bias_init_with_prob(.01))
@@ -112,7 +88,7 @@ class SparseNeckWithHead(nn.Module):
                 x = self._prune(x, scores)
 
             out = self.__getattr__(f'out_block_{i}')(x)
-            out = self.forward_single(out, self.scales[i])
+            out = self.forward_single(out, i)
             scores = out[-1]
             outs.append(out[:-1])
         return zip(*outs[::-1])
@@ -136,20 +112,18 @@ class SparseNeckWithHead(nn.Module):
         return x
 
     def loss(self,
-             centernesses,
              bbox_preds,
              cls_scores,
              points,
              gt_bboxes,
              gt_labels,
              img_metas):
-        assert len(centernesses[0]) == len(bbox_preds[0]) == len(cls_scores[0]) \
+        assert len(bbox_preds[0]) == len(cls_scores[0]) \
                == len(points[0]) == len(img_metas) == len(gt_bboxes) == len(gt_labels)
 
-        loss_centerness, loss_bbox, loss_cls = [], [], []
+        loss_bbox, loss_cls = [], []
         for i in range(len(img_metas)):
-            img_loss_centerness, img_loss_bbox, img_loss_cls = self._loss_single(
-                centernesses=[x[i] for x in centernesses],
+            img_loss_bbox, img_loss_cls = self._loss_single(
                 bbox_preds=[x[i] for x in bbox_preds],
                 cls_scores=[x[i] for x in cls_scores],
                 points=[x[i] for x in points],
@@ -157,18 +131,15 @@ class SparseNeckWithHead(nn.Module):
                 gt_bboxes=gt_bboxes[i],
                 gt_labels=gt_labels[i]
             )
-            loss_centerness.append(img_loss_centerness)
             loss_bbox.append(img_loss_bbox)
             loss_cls.append(img_loss_cls)
         return dict(
-            loss_centerness=torch.mean(torch.stack(loss_centerness)),
             loss_bbox=torch.mean(torch.stack(loss_bbox)),
             loss_cls=torch.mean(torch.stack(loss_cls))
         )
 
     # per image
     def _loss_single(self,
-                     centernesses,
                      bbox_preds,
                      cls_scores,
                      points,
@@ -178,17 +149,15 @@ class SparseNeckWithHead(nn.Module):
         with torch.no_grad():
             centerness_targets, bbox_targets, labels = self.assigner.assign(points, gt_bboxes, gt_labels)
 
-        centerness = torch.cat(centernesses)
         bbox_preds = torch.cat(bbox_preds)
         cls_scores = torch.cat(cls_scores)
         points = torch.cat(points)
 
         # skip background
         pos_inds = torch.nonzero(labels >= 0).squeeze(1)
-        n_pos = torch.tensor(len(pos_inds), dtype=torch.float, device=centerness.device)
+        n_pos = torch.tensor(len(pos_inds), dtype=torch.float, device=bbox_preds.device)
         n_pos = max(reduce_mean(n_pos), 1.)
         loss_cls = self.loss_cls(cls_scores, labels, avg_factor=n_pos)
-        pos_centerness = centerness[pos_inds]
         pos_bbox_preds = bbox_preds[pos_inds]
         pos_centerness_targets = centerness_targets[pos_inds].unsqueeze(1)
         pos_bbox_targets = bbox_targets[pos_inds]
@@ -198,9 +167,6 @@ class SparseNeckWithHead(nn.Module):
 
         if len(pos_inds) > 0:
             pos_points = points[pos_inds]
-            loss_centerness = self.loss_centerness(
-                pos_centerness, pos_centerness_targets, avg_factor=n_pos
-            )
             loss_bbox = self.loss_bbox(
                 self._bbox_to_loss(self._bbox_pred_to_bbox(pos_points, pos_bbox_preds)),
                 self._bbox_to_loss(pos_bbox_targets),
@@ -208,23 +174,19 @@ class SparseNeckWithHead(nn.Module):
                 avg_factor=centerness_denorm
             )
         else:
-            loss_centerness = pos_centerness.sum()
             loss_bbox = pos_bbox_preds.sum()
-        return loss_centerness, loss_bbox, loss_cls
+        return loss_bbox, loss_cls
 
     def get_bboxes(self,
-                   centernesses,
                    bbox_preds,
                    cls_scores,
                    points,
                    img_metas,
                    rescale=False):
-        assert len(centernesses[0]) == len(bbox_preds[0]) == len(cls_scores[0]) \
-               == len(points[0]) == len(img_metas)
+        assert len(bbox_preds[0]) == len(cls_scores[0]) == len(points[0]) == len(img_metas)
         results = []
         for i in range(len(img_metas)):
             result = self._get_bboxes_single(
-                centernesses=[x[i] for x in centernesses],
                 bbox_preds=[x[i] for x in bbox_preds],
                 cls_scores=[x[i] for x in cls_scores],
                 points=[x[i] for x in points],
@@ -235,16 +197,13 @@ class SparseNeckWithHead(nn.Module):
 
     # per image
     def _get_bboxes_single(self,
-                           centernesses,
                            bbox_preds,
                            cls_scores,
                            points,
                            img_meta):
         mlvl_bboxes, mlvl_scores = [], []
-        for centerness, bbox_pred, cls_score, point in zip(
-            centernesses, bbox_preds, cls_scores, points
-        ):
-            scores = cls_score.sigmoid() * centerness.sigmoid()
+        for bbox_pred, cls_score, point in zip(bbox_preds, cls_scores, points):
+            scores = cls_score.sigmoid()
             max_scores, _ = scores.max(dim=1)
 
             if len(scores) > self.test_cfg.nms_pre > 0:
@@ -314,30 +273,25 @@ class SparseNeckWithHead(nn.Module):
 
 
 @HEADS.register_module()
-class ScanNetSparseNeckWithHead(SparseNeckWithHead):
-    def forward_single(self, x, scale):
-        cls = self.cls_convs(x)
-        reg = self.reg_convs(x)
-        centerness = self.centerness_conv(reg).features
-        bbox_pred = torch.exp(scale(self.reg_conv(reg).features))
-        scores = self.cls_conv(cls)
+class ScanNetSparseFcaf3DNeckWithHead(SparseFcaf3DNeckWithHead):
+    def forward_single(self, x, i):
+        bbox_pred = torch.exp(self.__getattr__(f'scale_{i}')(self.reg_conv(x).features))
+        scores = self.cls_conv(x)
         cls_score = scores.features
         prune_scores = ME.SparseTensor(
             scores.features.max(dim=1, keepdim=True).values,
             coordinate_map_key=scores.coordinate_map_key,
             coordinate_manager=scores.coordinate_manager)
-        centernesses, bbox_preds, cls_scores, points = [], [], [], []
+        bbox_preds, cls_scores, points = [], [], []
         for permutation in x.decomposition_permutations:
-            centernesses.append(centerness[permutation])
             bbox_preds.append(bbox_pred[permutation])
             cls_scores.append(cls_score[permutation])
 
         points = x.decomposed_coordinates
         for i in range(len(points)):
-            # todo: do we need + .5?
             points[i] = points[i] * self.voxel_size
 
-        return centernesses, bbox_preds, cls_scores, points, prune_scores
+        return bbox_preds, cls_scores, points, prune_scores
 
     @staticmethod
     def _bbox_pred_to_bbox(points, bbox_pred):
@@ -370,25 +324,21 @@ class ScanNetSparseNeckWithHead(SparseNeckWithHead):
 
 
 @HEADS.register_module()
-class SunRgbdSparseNeckWithHead(SparseNeckWithHead):
-    def forward_single(self, x, scale):
-        cls = self.cls_convs(x)
-        reg = self.reg_convs(x)
-        centerness = self.centerness_conv(reg).features
-        scores = self.cls_conv(cls)
+class SunRgbdSparseFcaf3DNeckWithHead(SparseFcaf3DNeckWithHead):
+    def forward_single(self, x, i):
+        scores = self.cls_conv(x)
         cls_score = scores.features
         prune_scores = ME.SparseTensor(
             scores.features.max(dim=1, keepdim=True).values,
             coordinate_map_key=scores.coordinate_map_key,
             coordinate_manager=scores.coordinate_manager)
-        reg_final = self.reg_conv(reg).features
-        reg_distance = torch.exp(scale(reg_final[:, :6]))
+        reg_final = self.reg_conv(x).features
+        reg_distance = torch.exp(self.__getattr__(f'scale_{i}')(reg_final[:, :6]))
         reg_angle = reg_final[:, 6:]
         bbox_pred = torch.cat((reg_distance, reg_angle), dim=1)
 
-        centernesses, bbox_preds, cls_scores, points = [], [], [], []
+        bbox_preds, cls_scores, points = [], [], []
         for permutation in x.decomposition_permutations:
-            centernesses.append(centerness[permutation])
             bbox_preds.append(bbox_pred[permutation])
             cls_scores.append(cls_score[permutation])
 
@@ -396,7 +346,7 @@ class SunRgbdSparseNeckWithHead(SparseNeckWithHead):
         for i in range(len(points)):
             points[i] = points[i] * self.voxel_size
 
-        return centernesses, bbox_preds, cls_scores, points, prune_scores
+        return bbox_preds, cls_scores, points, prune_scores
 
     @staticmethod
     def _bbox_pred_to_bbox(points, bbox_pred):

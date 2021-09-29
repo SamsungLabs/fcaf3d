@@ -1,22 +1,24 @@
 import torch
 from torch import nn
 import MinkowskiEngine as ME
-from mmdet.core import multi_apply, reduce_mean, build_assigner, BaseAssigner
-from mmdet.core.bbox.builder import BBOX_ASSIGNERS
+from mmdet.core import BaseAssigner, reduce_mean, build_assigner
 from mmdet.models.builder import HEADS, build_loss
+from mmdet.core.bbox.builder import BBOX_ASSIGNERS
 from mmcv.cnn import Scale, bias_init_with_prob
 
 from mmdet3d.core.bbox.structures import rotation_3d_in_axis
-from mmdet3d.core.post_processing import aligned_3d_nms, box3d_multiclass_nms
+from mmdet3d.ops.pcdet_nms import pcdet_nms_gpu, pcdet_nms_normal_gpu
 
 
-class SparseFcos3DHead(nn.Module):
+class SparseFcos3DNeckWithHead(nn.Module):
     def __init__(self,
                  n_classes,
-                 n_channels,
+                 in_channels,
+                 out_channels,
                  n_convs,
                  n_reg_outs,
                  voxel_size,
+                 pts_threshold,
                  assigner,
                  loss_centerness=dict(
                      type='CrossEntropyLoss',
@@ -31,8 +33,7 @@ class SparseFcos3DHead(nn.Module):
                      loss_weight=1.0),
                  train_cfg=None,
                  test_cfg=None):
-        super().__init__()
-        self.n_classes = n_classes
+        super(SparseFcos3DNeckWithHead, self).__init__()
         self.voxel_size = voxel_size
         self.assigner = build_assigner(assigner)
         self.loss_centerness = build_loss(loss_centerness)
@@ -40,7 +41,8 @@ class SparseFcos3DHead(nn.Module):
         self.loss_cls = build_loss(loss_cls)
         self.train_cfg = train_cfg
         self.test_cfg = test_cfg
-        self._init_layers(n_channels, n_convs, n_reg_outs)
+        self.pts_threshold = pts_threshold
+        self._init_layers(in_channels, out_channels, n_convs, n_reg_outs, n_classes)
 
     @staticmethod
     def _make_block(in_channels, out_channels):
@@ -50,19 +52,44 @@ class SparseFcos3DHead(nn.Module):
             ME.MinkowskiELU()
         )
 
-    def _init_layers(self, n_channels, n_convs, n_reg_outs):
+    @staticmethod
+    def _make_up_block(in_channels, out_channels):
+        return nn.Sequential(
+            ME.MinkowskiGenerativeConvolutionTranspose(
+                in_channels,
+                out_channels,
+                kernel_size=2,
+                stride=2,
+                dimension=3,
+            ),
+            ME.MinkowskiBatchNorm(out_channels),
+            ME.MinkowskiELU(),
+            ME.MinkowskiConvolution(out_channels, out_channels, kernel_size=3, dimension=3),
+            ME.MinkowskiBatchNorm(out_channels),
+            ME.MinkowskiELU()
+        )
+
+    def _init_layers(self, in_channels, out_channels, n_convs, n_reg_outs, n_classes):
+        # neck layers
+        self.pruning = ME.MinkowskiPruning()
+        for i in range(len(in_channels)):
+            if i > 0:
+                self.__setattr__(f'up_block_{i}', self._make_up_block(in_channels[i], in_channels[i - 1]))
+            self.__setattr__(f'out_block_{i}', self._make_block(in_channels[i], out_channels))
+
+        # head layers
         self.cls_convs = nn.Sequential(*[
-            self._make_block(n_channels, n_channels)
+            self._make_block(out_channels, out_channels)
             for _ in range(n_convs)
         ])
         self.reg_convs = nn.Sequential(*[
-            self._make_block(n_channels, n_channels)
+            self._make_block(out_channels, out_channels)
             for _ in range(n_convs)
         ])
-        self.centerness_conv = ME.MinkowskiConvolution(n_channels, 1, kernel_size=1, dimension=3)
-        self.reg_conv = ME.MinkowskiConvolution(n_channels, n_reg_outs, kernel_size=1, dimension=3)
-        self.cls_conv = ME.MinkowskiConvolution(n_channels, self.n_classes, kernel_size=1, bias=True, dimension=3)
-        self.scales = nn.ModuleList([Scale(1.) for _ in range(self.assigner.n_scales)])
+        self.centerness_conv = ME.MinkowskiConvolution(out_channels, 1, kernel_size=1, dimension=3)
+        self.reg_conv = ME.MinkowskiConvolution(out_channels, n_reg_outs, kernel_size=1, dimension=3)
+        self.cls_conv = ME.MinkowskiConvolution(out_channels, n_classes, kernel_size=1, bias=True, dimension=3)
+        self.scales = nn.ModuleList([Scale(1.) for _ in range(len(in_channels))])
 
     def init_weights(self):
         for module in self.cls_convs.modules():
@@ -77,7 +104,38 @@ class SparseFcos3DHead(nn.Module):
         nn.init.constant_(self.cls_conv.bias, bias_init_with_prob(.01))
 
     def forward(self, x):
-        return multi_apply(self.forward_single, x, self.scales)
+        outs = []
+        inputs = x
+        x = inputs[-1]
+        for i in range(len(inputs) - 1, -1, -1):
+            if i < len(inputs) - 1:
+                x = self.__getattr__(f'up_block_{i + 1}')(x)
+                x = inputs[i] + x
+                x = self._prune(x, scores)
+
+            out = self.__getattr__(f'out_block_{i}')(x)
+            out = self.forward_single(out, self.scales[i])
+            scores = out[-1]
+            outs.append(out[:-1])
+        return zip(*outs[::-1])
+
+    def _prune(self, x, scores):
+        if self.pts_threshold < 0:
+            return x
+
+        with torch.no_grad():
+            coordinates = x.C.float()  # todo: [:, 1:] / 2 ?
+            interpolated_scores = scores.features_at_coordinates(coordinates)
+            prune_mask = interpolated_scores.new_zeros((len(interpolated_scores)), dtype=torch.bool)
+            for permutation in x.decomposition_permutations:
+                score = interpolated_scores[permutation]
+                mask = score.new_zeros((len(score)), dtype=torch.bool)
+                topk = min(len(score), self.pts_threshold)
+                ids = torch.topk(score.squeeze(1), topk, sorted=False).indices
+                mask[ids] = True
+                prune_mask[permutation[mask]] = True
+        x = self.pruning(x, prune_mask)
+        return x
 
     def loss(self,
              centernesses,
@@ -217,18 +275,59 @@ class SparseFcos3DHead(nn.Module):
         raise NotImplementedError
 
     def _nms(self, bboxes, scores, img_meta):
-        raise NotImplementedError
+        n_classes = scores.shape[1]
+        yaw_flag = bboxes.shape[1] == 7
+        nms_bboxes, nms_scores, nms_labels = [], [], []
+        for i in range(n_classes):
+            ids = scores[:, i] > self.test_cfg.score_thr
+            if not ids.any():
+                continue
+
+            class_scores = scores[ids, i]
+            class_bboxes = bboxes[ids]
+            if yaw_flag:
+                nms_function = pcdet_nms_gpu
+            else:
+                class_bboxes = torch.cat((
+                    class_bboxes, torch.zeros_like(class_bboxes[:, :1])), dim=1)
+                nms_function = pcdet_nms_normal_gpu
+
+            nms_ids, _ = nms_function(class_bboxes, class_scores, self.test_cfg.iou_thr)
+            nms_bboxes.append(class_bboxes[nms_ids])
+            nms_scores.append(class_scores[nms_ids])
+            nms_labels.append(bboxes.new_full(class_scores[nms_ids].shape, i, dtype=torch.long))
+
+        if len(nms_bboxes):
+            nms_bboxes = torch.cat(nms_bboxes, dim=0)
+            nms_scores = torch.cat(nms_scores, dim=0)
+            nms_labels = torch.cat(nms_labels, dim=0)
+
+        if yaw_flag:
+            box_dim = 7
+            with_yaw = True
+        else:
+            box_dim = 6
+            with_yaw = False
+            nms_bboxes = nms_bboxes[:, :6]
+        nms_bboxes = img_meta['box_type_3d'](
+            nms_bboxes, box_dim=box_dim, with_yaw=with_yaw, origin=(.5, .5, .5))
+
+        return nms_bboxes, nms_scores, nms_labels
 
 
 @HEADS.register_module()
-class ScanNetSparseFcos3DHead(SparseFcos3DHead):
+class ScanNetSparseFcos3DNeckWithHead(SparseFcos3DNeckWithHead):
     def forward_single(self, x, scale):
         cls = self.cls_convs(x)
         reg = self.reg_convs(x)
         centerness = self.centerness_conv(reg).features
         bbox_pred = torch.exp(scale(self.reg_conv(reg).features))
-        cls_score = self.cls_conv(cls).features
-
+        scores = self.cls_conv(cls)
+        cls_score = scores.features
+        prune_scores = ME.SparseTensor(
+            scores.features.max(dim=1, keepdim=True).values,
+            coordinate_map_key=scores.coordinate_map_key,
+            coordinate_manager=scores.coordinate_manager)
         centernesses, bbox_preds, cls_scores, points = [], [], [], []
         for permutation in x.decomposition_permutations:
             centernesses.append(centerness[permutation])
@@ -240,7 +339,7 @@ class ScanNetSparseFcos3DHead(SparseFcos3DHead):
             # todo: do we need + .5?
             points[i] = points[i] * self.voxel_size
 
-        return centernesses, bbox_preds, cls_scores, points
+        return centernesses, bbox_preds, cls_scores, points, prune_scores
 
     @staticmethod
     def _bbox_pred_to_bbox(points, bbox_pred):
@@ -271,27 +370,59 @@ class ScanNetSparseFcos3DHead(SparseFcos3DHead):
     def _bbox_to_loss(self, bbox):
         return self._aligned_bbox_to_limits(bbox)
 
-    def _nms(self, bboxes, scores, img_meta):
-        scores, labels = scores.max(dim=1)
-        ids = scores > self.test_cfg.score_thr
-        bboxes = bboxes[ids]
-        scores = scores[ids]
-        labels = labels[ids]
-        bboxes = self._aligned_bbox_to_limits(bboxes)
-        ids = aligned_3d_nms(bboxes, scores, labels, self.test_cfg.iou_thr)
-        bboxes = bboxes[ids]
-        # x_min, y_min, z_min, x_max, y_max, z_max ->
-        # x, y, z, w, l, h
-        bboxes = torch.stack((
-            (bboxes[:, 0] + bboxes[:, 3]) / 2.,
-            (bboxes[:, 1] + bboxes[:, 4]) / 2.,
-            (bboxes[:, 2] + bboxes[:, 5]) / 2.,
-            bboxes[:, 3] - bboxes[:, 0],
-            bboxes[:, 4] - bboxes[:, 1],
-            bboxes[:, 5] - bboxes[:, 2]
-        ), dim=1)
-        bboxes = img_meta['box_type_3d'](bboxes, origin=(.5, .5, .5), box_dim=6, with_yaw=False)
-        return bboxes, scores[ids], labels[ids]
+
+@HEADS.register_module()
+class SunRgbdSparseFcos3DNeckWithHead(SparseFcos3DNeckWithHead):
+    def forward_single(self, x, scale):
+        cls = self.cls_convs(x)
+        reg = self.reg_convs(x)
+        centerness = self.centerness_conv(reg).features
+        scores = self.cls_conv(cls)
+        cls_score = scores.features
+        prune_scores = ME.SparseTensor(
+            scores.features.max(dim=1, keepdim=True).values,
+            coordinate_map_key=scores.coordinate_map_key,
+            coordinate_manager=scores.coordinate_manager)
+        reg_final = self.reg_conv(reg).features
+        reg_distance = torch.exp(scale(reg_final[:, :6]))
+        reg_angle = reg_final[:, 6:]
+        bbox_pred = torch.cat((reg_distance, reg_angle), dim=1)
+
+        centernesses, bbox_preds, cls_scores, points = [], [], [], []
+        for permutation in x.decomposition_permutations:
+            centernesses.append(centerness[permutation])
+            bbox_preds.append(bbox_pred[permutation])
+            cls_scores.append(cls_score[permutation])
+
+        points = x.decomposed_coordinates
+        for i in range(len(points)):
+            points[i] = points[i] * self.voxel_size
+
+        return centernesses, bbox_preds, cls_scores, points, prune_scores
+
+    @staticmethod
+    def _bbox_pred_to_bbox(points, bbox_pred):
+        if bbox_pred.shape[0] == 0:
+            return bbox_pred
+
+        # dx_min, dx_max, dy_min, dy_max, dz_min, dz_max, sin(2a)ln(q), cos(2a)ln(q) ->
+        # x_center, y_center, z_center, w, l, h, alpha
+        scale = bbox_pred[:, 0] + bbox_pred[:, 1] + bbox_pred[:, 2] + bbox_pred[:, 3]
+        q = torch.exp(torch.sqrt(torch.pow(bbox_pred[:, 6], 2) + torch.pow(bbox_pred[:, 7], 2)))
+        alpha = 0.5 * torch.atan2(bbox_pred[:, 6], bbox_pred[:, 7])
+        return torch.stack((
+            points[:, 0] + (bbox_pred[:, 1] - bbox_pred[:, 0]) / 2,
+            points[:, 1] + (bbox_pred[:, 3] - bbox_pred[:, 2]) / 2,
+            points[:, 2] + (bbox_pred[:, 5] - bbox_pred[:, 4]) / 2,
+            scale / (1 + q),
+            scale * q / (1 + q),
+            bbox_pred[:, 5] + bbox_pred[:, 4],
+            alpha
+        ), dim=-1)
+
+    @staticmethod
+    def _bbox_to_loss(bbox):
+        return bbox
 
 
 def compute_centerness(bbox_targets):
@@ -454,79 +585,6 @@ class ScanNetLimitedAssigner(BaseAssigner):
         centerness_targets = compute_centerness(bbox_targets)
 
         return centerness_targets, gt_bboxes[range(n_points), min_area_inds], labels
-
-
-@HEADS.register_module()
-class SunRgbdSparseFcos3DHead(SparseFcos3DHead):
-    def forward_single(self, x, scale):
-        cls = self.cls_convs(x)
-        reg = self.reg_convs(x)
-        centerness = self.centerness_conv(reg).features
-        reg_final = self.reg_conv(reg).features
-        reg_distance = torch.exp(scale(reg_final[:, :6]))
-        reg_angle = reg_final[:, 6:]
-        bbox_pred = torch.cat((reg_distance, reg_angle), dim=1)
-        cls_score = self.cls_conv(cls).features
-
-        centernesses, bbox_preds, cls_scores, points = [], [], [], []
-        for permutation in x.decomposition_permutations:
-            centernesses.append(centerness[permutation])
-            bbox_preds.append(bbox_pred[permutation])
-            cls_scores.append(cls_score[permutation])
-
-        points = x.decomposed_coordinates
-        for i in range(len(points)):
-            points[i] = points[i] * self.voxel_size
-
-        return centernesses, bbox_preds, cls_scores, points
-
-    @staticmethod
-    def _bbox_pred_to_bbox(points, bbox_pred):
-        if bbox_pred.shape[0] == 0:
-            return bbox_pred
-
-        # dx_min, dx_max, dy_min, dy_max, dz_min, dz_max, sin(2a)ln(q), cos(2a)ln(q) ->
-        # x_center, y_center, z_center, w, l, h, alpha
-        scale = bbox_pred[:, 0] + bbox_pred[:, 1] + bbox_pred[:, 2] + bbox_pred[:, 3]
-        q = torch.exp(torch.sqrt(torch.pow(bbox_pred[:, 6], 2) + torch.pow(bbox_pred[:, 7], 2)))
-        alpha = 0.5 * torch.atan2(bbox_pred[:, 6], bbox_pred[:, 7])
-        return torch.stack((
-            points[:, 0] + (bbox_pred[:, 1] - bbox_pred[:, 0]) / 2,
-            points[:, 1] + (bbox_pred[:, 3] - bbox_pred[:, 2]) / 2,
-            points[:, 2] + (bbox_pred[:, 5] - bbox_pred[:, 4]) / 2,
-            scale / (1 + q),
-            scale * q / (1 + q),
-            bbox_pred[:, 5] + bbox_pred[:, 4],
-            alpha
-        ), dim=-1)
-
-    @staticmethod
-    def _bbox_to_loss(bbox):
-        return bbox
-
-    def _nms(self, bboxes, scores, img_meta):
-        # Add a dummy background class to the end. Nms needs to be fixed in the future.
-        padding = scores.new_zeros(scores.shape[0], 1)
-        scores = torch.cat([scores, padding], dim=1)
-        # x, y, z, w, l, h, alpha ->
-        # x_min, y_min, x_max, y_max, alpha
-        bboxes_for_nms = torch.stack((
-            bboxes[:, 0] - bboxes[:, 3] / 2,
-            bboxes[:, 1] - bboxes[:, 4] / 2,
-            bboxes[:, 0] + bboxes[:, 3] / 2,
-            bboxes[:, 1] + bboxes[:, 4] / 2,
-            bboxes[:, 6]
-        ), dim=1)
-        bboxes, scores, labels = box3d_multiclass_nms(
-            mlvl_bboxes=bboxes,
-            mlvl_bboxes_for_nms=bboxes_for_nms,
-            mlvl_scores=scores,
-            score_thr=self.test_cfg.score_thr,
-            max_num=self.test_cfg.nms_pre,
-            cfg=self.test_cfg
-        )
-        bboxes = img_meta['box_type_3d'](bboxes, origin=(.5, .5, .5))
-        return bboxes, scores, labels
 
 
 @BBOX_ASSIGNERS.register_module()
