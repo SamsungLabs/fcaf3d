@@ -11,22 +11,21 @@ class ResNetBase(nn.Module):
     INIT_DIM = 64
     PLANES = (64, 128, 256, 512)
 
-    def __init__(self, in_channels, D=3):
+    def __init__(self, in_channels):
         nn.Module.__init__(self)
-        self.D = D
         assert self.BLOCK is not None
 
-        self.init_layers(in_channels, D)
+        self.init_layers(in_channels)
 
-    def init_layers(self, in_channels, D):
+    def init_layers(self, in_channels):
         self.inplanes = self.INIT_DIM
         self.conv1 = nn.Sequential(
             ME.MinkowskiConvolution(
-                in_channels, self.inplanes, kernel_size=3, stride=2, dimension=D
+                in_channels, self.inplanes, kernel_size=3, stride=2, dimension=3
             ),
             ME.MinkowskiInstanceNorm(self.inplanes),
             ME.MinkowskiReLU(inplace=True),
-            ME.MinkowskiMaxPooling(kernel_size=2, stride=2, dimension=D),
+            ME.MinkowskiMaxPooling(kernel_size=2, stride=2, dimension=3),
         )
 
         self.layer1 = self._make_layer(
@@ -60,7 +59,7 @@ class ResNetBase(nn.Module):
                     planes * block.expansion,
                     kernel_size=1,
                     stride=stride,
-                    dimension=self.D,
+                    dimension=3,
                 ),
                 ME.MinkowskiBatchNorm(planes * block.expansion),
             )
@@ -72,16 +71,12 @@ class ResNetBase(nn.Module):
                 stride=stride,
                 dilation=dilation,
                 downsample=downsample,
-                dimension=self.D,
+                dimension=3,
             )
         )
         self.inplanes = planes * block.expansion
         for i in range(1, blocks):
-            layers.append(
-                block(
-                    self.inplanes, planes, stride=1, dilation=dilation, dimension=self.D
-                )
-            )
+            layers.append(block(self.inplanes, planes, stride=1, dilation=dilation, dimension=3))
 
         return nn.Sequential(*layers)
 

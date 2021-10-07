@@ -1,33 +1,10 @@
-voxel_size = .01
+_base_ = ['fcaf3d.py']
 n_points = 100000
 
 model = dict(
-    type='SingleStageSparse3DDetector',
-    voxel_size=voxel_size,
-    backbone=dict(
-        type='MEResNet3D',
-        in_channels=3,
-        depth=34),
     neck_with_head=dict(
-        type='SunRgbdSparseFcos3DNeckWithHead',
-        in_channels=(64, 128, 256, 512),
-        out_channels=128,
-        pts_threshold=n_points,
         n_classes=10,
-        n_convs=0,
-        n_reg_outs=8,
-        voxel_size=voxel_size,
-        loss_bbox=dict(type='IoU3DLoss', loss_weight=1.0),
-        assigner=dict(
-            type='SunRgbdLimitedAssigner',
-            topk=18,
-            limit=27,
-            n_scales=4)),
-    train_cfg=dict(),
-    test_cfg=dict(
-        nms_pre=1000,
-        iou_thr=.5,
-        score_thr=.01))
+        n_reg_outs=8))
 
 dataset_type = 'SUNRGBDDataset'
 data_root = 'data/sunrgbd/'
@@ -118,23 +95,3 @@ data = dict(
         classes=class_names,
         test_mode=True,
         box_type_3d='Depth'))
-
-optimizer = dict(type='AdamW', lr=0.001, weight_decay=0.0001)
-optimizer_config = dict(grad_clip=dict(max_norm=10, norm_type=2))
-lr_config = dict(policy='step', warmup=None, step=[8, 11])
-runner = dict(type='EpochBasedRunner', max_epochs=12)
-custom_hooks = [dict(type='EmptyCacheHook', after_iter=True)]
-
-checkpoint_config = dict(interval=1, max_keep_ckpts=1)
-log_config = dict(
-    interval=50,
-    hooks=[
-        dict(type='TextLoggerHook'),
-        # dict(type='TensorboardLoggerHook')
-    ])
-dist_params = dict(backend='nccl')
-log_level = 'INFO'
-work_dir = None
-load_from = None
-resume_from = None
-workflow = [('train', 1)]

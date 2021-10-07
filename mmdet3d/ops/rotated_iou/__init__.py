@@ -1,3 +1,3 @@
-from .iou3d_loss import IoU3DLoss, GIoU3DLoss
+from .oriented_iou_loss import cal_iou_3d, cal_giou_3d
 
-__all__ = ['IoU3DLoss', 'GIoU3DLoss']
+__all__ = ['cal_iou_3d', 'cal_giou_3d']
