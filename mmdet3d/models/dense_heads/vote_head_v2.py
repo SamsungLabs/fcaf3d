@@ -39,6 +39,8 @@ class VoteHeadV2(BaseModule):
 
     def __init__(self,
                  num_classes,
+                 n_reg_outs=8,
+                 yaw_parametrization='fcaf3d',
                  train_cfg=None,
                  test_cfg=None,
                  vote_module_cfg=None,
@@ -53,6 +55,7 @@ class VoteHeadV2(BaseModule):
                  init_cfg=None):
         super(VoteHeadV2, self).__init__(init_cfg=init_cfg)
         self.num_classes = num_classes
+        self.yaw_parametrization = yaw_parametrization
         self.train_cfg = train_cfg
         self.test_cfg = test_cfg
         self.gt_per_seed = vote_module_cfg['gt_per_seed']
@@ -72,16 +75,12 @@ class VoteHeadV2(BaseModule):
         self.conv_pred = BaseConvBboxHead(
             **pred_layer_cfg,
             num_cls_out_channels=self._get_cls_out_channels(),
-            num_reg_out_channels=self._get_reg_out_channels())
+            num_reg_out_channels=n_reg_outs)
 
     def _get_cls_out_channels(self):
         """Return the channel number of classification outputs."""
         # Class numbers (k) + objectness (2)
         return self.num_classes + 2
-
-    def _get_reg_out_channels(self):
-        """Return the channel number of regression outputs."""
-        return 8
 
     def _extract_input(self, feat_dict):
         """Extract inputs from features dictionary.
@@ -193,21 +192,49 @@ class VoteHeadV2(BaseModule):
         results['sem_scores'] = cls_preds_trans[..., 2:]
 
         bbox_pred = reg_predictions.transpose(2, 1)
-        # todo: move to separate function
-        # dx, dy, dz, scale, h, sin(2a)ln(q), cos(2a)ln(q) ->
-        # x_center, y_center, z_center, w, l, h, alpha
-        scale = torch.exp(bbox_pred[..., 3])
-        q = torch.exp(torch.sqrt(torch.pow(bbox_pred[..., 5], 2) + torch.pow(bbox_pred[..., 6], 2)))
-        alpha = 0.5 * torch.atan2(bbox_pred[..., 5], bbox_pred[..., 6])
-        results['bbox_preds'] = torch.stack((
-            aggregated_points[..., 0] + bbox_pred[..., 0],
-            aggregated_points[..., 1] + bbox_pred[..., 1],
-            aggregated_points[..., 2] + bbox_pred[..., 2],
-            scale / (1 + q),
-            scale * q / (1 + q),
-            torch.exp(bbox_pred[..., 4]),
-            alpha
-        ), dim=-1)
+
+        if self.yaw_parametrization == 'naive':
+            # dx, dy, dz, w, l, h, alpha ->
+            # x_center, y_center, z_center, w, l, h, alpha
+            results['bbox_preds'] = torch.stack((
+                aggregated_points[..., 0] + bbox_pred[..., 0],
+                aggregated_points[..., 1] + bbox_pred[..., 1],
+                aggregated_points[..., 2] + bbox_pred[..., 2],
+                torch.exp(bbox_pred[..., 3]),
+                torch.exp(bbox_pred[..., 4]),
+                torch.exp(bbox_pred[..., 5]),
+                bbox_pred[..., 6]
+            ), dim=-1)
+        elif self.yaw_parametrization == 'sin-cos':
+            # dx, dy, dz, w, l, h, sin(a), cos(a) ->
+            # x_center, y_center, z_center, w, l, h, alpha
+            norm = torch.pow(torch.pow(bbox_pred[..., 6], 2) + torch.pow(bbox_pred[..., 7], 2), 0.5)
+            sin = bbox_pred[..., 6] / norm
+            cos = bbox_pred[..., 7] / norm
+            results['bbox_preds'] = torch.stack((
+                aggregated_points[..., 0] + bbox_pred[..., 0],
+                aggregated_points[..., 1] + bbox_pred[..., 1],
+                aggregated_points[..., 2] + bbox_pred[..., 2],
+                torch.exp(bbox_pred[..., 3]),
+                torch.exp(bbox_pred[..., 4]),
+                torch.exp(bbox_pred[..., 5]),
+                torch.atan2(sin, cos)
+            ), dim=-1)
+        else:  # self.yaw_parametrization == 'fcaf3d'
+            # dx, dy, dz, scale, h, sin(2a)ln(q), cos(2a)ln(q) ->
+            # x_center, y_center, z_center, w, l, h, alpha
+            scale = torch.exp(bbox_pred[..., 3])
+            q = torch.exp(torch.sqrt(torch.pow(bbox_pred[..., 5], 2) + torch.pow(bbox_pred[..., 6], 2)))
+            alpha = 0.5 * torch.atan2(bbox_pred[..., 5], bbox_pred[..., 6])
+            results['bbox_preds'] = torch.stack((
+                aggregated_points[..., 0] + bbox_pred[..., 0],
+                aggregated_points[..., 1] + bbox_pred[..., 1],
+                aggregated_points[..., 2] + bbox_pred[..., 2],
+                scale / (1 + q),
+                scale * q / (1 + q),
+                torch.exp(bbox_pred[..., 4]),
+                alpha
+            ), dim=-1)
         return results
 
     @force_fp32(apply_to=('bbox_preds', ))
@@ -268,43 +295,6 @@ class VoteHeadV2(BaseModule):
             dst_weight=valid_gt_weights)
         center_loss = source2target_loss + target2source_loss
 
-        # calculate direction class loss
-        # dir_class_loss = self.dir_class_loss(
-        #     bbox_preds['dir_class'].transpose(2, 1),
-        #     dir_class_targets,
-        #     weight=box_loss_weights)
-
-        # calculate direction residual loss
-        # batch_size, proposal_num = size_class_targets.shape[:2]
-        # heading_label_one_hot = vote_targets.new_zeros(
-        #     (batch_size, proposal_num, self.num_dir_bins))
-        # heading_label_one_hot.scatter_(2, dir_class_targets.unsqueeze(-1), 1)
-        # dir_res_norm = torch.sum(
-        #     bbox_preds['dir_res_norm'] * heading_label_one_hot, -1)
-        # dir_res_loss = self.dir_res_loss(
-        #     dir_res_norm, dir_res_targets, weight=box_loss_weights)
-
-        # calculate size class loss
-        # size_class_loss = self.size_class_loss(
-        #     bbox_preds['size_class'].transpose(2, 1),
-        #     size_class_targets,
-        #     weight=box_loss_weights)
-
-        # calculate size residual loss
-        # one_hot_size_targets = vote_targets.new_zeros(
-        #     (batch_size, proposal_num, self.num_sizes))
-        # one_hot_size_targets.scatter_(2, size_class_targets.unsqueeze(-1), 1)
-        # one_hot_size_targets_expand = one_hot_size_targets.unsqueeze(
-        #     -1).repeat(1, 1, 1, 3).contiguous()
-        # size_residual_norm = torch.sum(
-        #     bbox_preds['size_res_norm'] * one_hot_size_targets_expand, 2)
-        # box_loss_weights_expand = box_loss_weights.unsqueeze(-1).repeat(
-        #     1, 1, 3)
-        # size_res_loss = self.size_res_loss(
-        #     size_residual_norm,
-        #     size_res_targets,
-        #     weight=box_loss_weights_expand)
-
         # calculate semantic loss
         semantic_loss = self.semantic_loss(
             bbox_preds['sem_scores'].transpose(2, 1),
@@ -324,17 +314,6 @@ class VoteHeadV2(BaseModule):
             semantic_loss=semantic_loss,
             center_loss=center_loss,
             iou_loss=iou_loss)
-
-        # if self.iou_loss:
-        #     corners_pred = self.bbox_coder.decode_corners(
-        #         bbox_preds['center'], size_residual_norm,
-        #         one_hot_size_targets_expand)
-        #     corners_target = self.bbox_coder.decode_corners(
-        #         assigned_center_targets, size_res_targets,
-        #         one_hot_size_targets_expand)
-        #     iou_loss = self.iou_loss(
-        #         corners_pred, corners_target, weight=box_loss_weights)
-        #     losses['iou_loss'] = iou_loss
 
         if ret_target:
             losses['targets'] = targets
@@ -409,7 +388,6 @@ class VoteHeadV2(BaseModule):
         center_targets = torch.stack(center_targets)
         valid_gt_masks = torch.stack(valid_gt_masks)
 
-        # assigned_center_targets = torch.stack(assigned_center_targets)
         objectness_targets = torch.stack(objectness_targets)
         objectness_weights = torch.stack(objectness_masks)
         objectness_weights /= (torch.sum(objectness_weights) + 1e-6)
@@ -417,10 +395,6 @@ class VoteHeadV2(BaseModule):
             torch.sum(objectness_targets).float() + 1e-6)
         valid_gt_weights = valid_gt_masks.float() / (
             torch.sum(valid_gt_masks.float()) + 1e-6)
-        # dir_class_targets = torch.stack(dir_class_targets)
-        # dir_res_targets = torch.stack(dir_res_targets)
-        # size_class_targets = torch.stack(size_class_targets)
-        # size_res_targets = torch.stack(size_res_targets)
         mask_targets = torch.stack(mask_targets)
 
         return (vote_targets, vote_target_masks, center_targets, bbox_targets, mask_targets,
@@ -505,10 +479,6 @@ class VoteHeadV2(BaseModule):
         else:
             raise NotImplementedError
 
-        # (center_targets, size_class_targets, size_res_targets,
-        #  dir_class_targets,
-        #  dir_res_targets) = self.bbox_coder.encode(gt_bboxes_3d, gt_labels_3d)
-
         center_targets = gt_bboxes_3d.gravity_center
 
         proposal_num = aggregated_points.shape[0]
@@ -529,24 +499,7 @@ class VoteHeadV2(BaseModule):
         objectness_masks[
             euclidean_distance1 > self.train_cfg['neg_distance_thr']] = 1.0
 
-        # dir_class_targets = dir_class_targets[assignment]
-        # dir_res_targets = dir_res_targets[assignment]
-        # dir_res_targets /= (np.pi / self.num_dir_bins)
-        # size_class_targets = size_class_targets[assignment]
-        # size_res_targets = size_res_targets[assignment]
-
-        # one_hot_size_targets = gt_bboxes_3d.tensor.new_zeros(
-        #     (proposal_num, self.num_sizes))
-        # one_hot_size_targets.scatter_(1, size_class_targets.unsqueeze(-1), 1)
-        # one_hot_size_targets = one_hot_size_targets.unsqueeze(-1).repeat(
-        #     1, 1, 3)
-        # mean_sizes = size_res_targets.new_tensor(
-        #     self.bbox_coder.mean_sizes).unsqueeze(0)
-        # pos_mean_sizes = torch.sum(one_hot_size_targets * mean_sizes, 1)
-        # size_res_targets /= pos_mean_sizes
-
         mask_targets = gt_labels_3d[assignment]
-        # assigned_center_targets = center_targets[assignment]
         bbox_targets = torch.cat((center_targets[assignment], gt_bboxes_3d.tensor[assignment, 3:]), dim=-1)
 
         return (vote_targets, vote_target_masks, center_targets, bbox_targets,

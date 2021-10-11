@@ -11,13 +11,7 @@ from .shape_aware_head import ShapeAwareHead
 from .ssd_3d_head import SSD3DHead
 from .vote_head import VoteHead
 from .vote_head_v2 import VoteHeadV2
-from .sparse_fcos3d_neck_with_head import (
-    ScanNetSparseFcos3DNeckWithHead, SunRgbdSparseFcos3DNeckWithHead,
-    ScanNetFcos3dAssigner, SunRgbdFcos3dAssigner,
-    ScanNetLimitedAssigner, SunRgbdLimitedAssigner)
-from .sparse_fcaf3d_neck_with_head import (
-    ScanNetSparseFcaf3DNeckWithHead, SunRgbdSparseFcaf3DNeckWithHead
-)
+from .fcaf3d_neck_with_head import Fcaf3DNeckWithHead, Fcaf3DAssigner
 
 __all__ = [
     'Anchor3DHead', 'FreeAnchor3DHead', 'PartA2RPNHead', 'VoteHead',
