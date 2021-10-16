@@ -35,7 +35,13 @@ def main():
     checkpoints = tuple(filter(lambda x: x.endswith('.pth'), os.listdir(args.checkpoint)))
     print('found checkpoints: ', checkpoints)
     metrics = defaultdict(list)
+    model = build_model(cfg.model, test_cfg=cfg.get('test_cfg'))
+    model = MMDistributedDataParallel(
+        model.cuda(),
+        device_ids=[torch.cuda.current_device()],
+        broadcast_buffers=False)
     for i, checkpoint in enumerate(checkpoints):
+        load_checkpoint(model, os.path.join(args.checkpoint, checkpoint), map_location='cpu')
         for j in range(5):
             set_random_seed(j * 111)
             dataset = build_dataset(cfg.data.test)
@@ -45,12 +51,6 @@ def main():
                 workers_per_gpu=cfg.data.workers_per_gpu,
                 dist=True,
                 shuffle=False)
-            model = build_model(cfg.model, test_cfg=cfg.get('test_cfg'))
-            load_checkpoint(model, os.path.join(args.checkpoint, checkpoint), map_location='cpu')
-            model = MMDistributedDataParallel(
-                model.cuda(),
-                device_ids=[torch.cuda.current_device()],
-                broadcast_buffers=False)
             outputs = multi_gpu_test(model, data_loader)
             if get_dist_info()[0] == 0:
                 for k, v in dataset.evaluate(outputs).items():
