@@ -39,7 +39,7 @@ class VoteHeadV2(BaseModule):
 
     def __init__(self,
                  num_classes,
-                 n_reg_outs=8,
+                 n_reg_outs=7,
                  yaw_parametrization='fcaf3d',
                  train_cfg=None,
                  test_cfg=None,
