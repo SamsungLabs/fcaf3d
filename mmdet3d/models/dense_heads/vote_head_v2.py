@@ -231,7 +231,7 @@ class VoteHeadV2(BaseModule):
                 aggregated_points[..., 1] + bbox_pred[..., 1],
                 aggregated_points[..., 2] + bbox_pred[..., 2],
                 scale / (1 + q),
-                scale * q / (1 + q),
+                scale / (1 + q) * q,
                 torch.exp(bbox_pred[..., 4]),
                 alpha
             ), dim=-1)

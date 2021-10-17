@@ -307,7 +307,7 @@ class Fcaf3DNeckWithHead(nn.Module):
             ), -1)
         elif self.yaw_parametrization == 'sin-cos':
             # ..., sin(a), cos(a)
-            norm = torch.pow(torch.pow(bbox_pred[:, 6], 2) + torch.pow(bbox_pred[:, 7], 2), 0.5)
+            norm = torch.pow(torch.pow(bbox_pred[:, 6:7], 2) + torch.pow(bbox_pred[:, 7:8], 2), 0.5)
             sin = bbox_pred[:, 6:7] / norm
             cos = bbox_pred[:, 7:8] / norm
             return torch.cat((
@@ -324,7 +324,7 @@ class Fcaf3DNeckWithHead(nn.Module):
                 y_center,
                 z_center,
                 scale / (1 + q),
-                scale * q / (1 + q),
+                scale / (1 + q) * q,
                 bbox_pred[:, 5] + bbox_pred[:, 4],
                 alpha
             ), dim=-1)
