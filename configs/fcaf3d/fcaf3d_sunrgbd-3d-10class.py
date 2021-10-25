@@ -73,6 +73,7 @@ data = dict(
         times=3,
         dataset=dict(
             type=dataset_type,
+            modality=dict(use_camera=False, use_lidar=True),
             data_root=data_root,
             ann_file=data_root + 'sunrgbd_infos_train.pkl',
             pipeline=train_pipeline,
@@ -81,6 +82,7 @@ data = dict(
             box_type_3d='Depth')),
     val=dict(
         type=dataset_type,
+        modality=dict(use_camera=False, use_lidar=True),
         data_root=data_root,
         ann_file=data_root + 'sunrgbd_infos_val.pkl',
         pipeline=test_pipeline,
@@ -89,6 +91,7 @@ data = dict(
         box_type_3d='Depth'),
     test=dict(
         type=dataset_type,
+        modality=dict(use_camera=False, use_lidar=True),
         data_root=data_root,
         ann_file=data_root + 'sunrgbd_infos_val.pkl',
         pipeline=test_pipeline,

@@ -8,7 +8,7 @@ from mmdet3d.datasets.pipelines import (Collect3D, DefaultFormatBundle3D,
                                         LoadPointsFromFile,
                                         LoadPointsFromMultiSweeps,
                                         MultiScaleFlipAug3D,
-                                        PointSegClassMapping)
+                                        PointSegClassMapping, GlobalAlignment)
 # yapf: enable
 from mmdet.datasets.builder import PIPELINES
 from mmdet.datasets.pipelines import LoadImageFromFile
@@ -32,7 +32,7 @@ def is_loading_function(transform):
                          LoadAnnotations3D, LoadMultiViewImageFromFiles,
                          LoadPointsFromMultiSweeps, DefaultFormatBundle3D,
                          Collect3D, LoadImageFromFileMono3D,
-                         PointSegClassMapping)
+                         PointSegClassMapping, GlobalAlignment)
     if isinstance(transform, dict):
         obj_cls = PIPELINES.get(transform['type'])
         if obj_cls is None:
