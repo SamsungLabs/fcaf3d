@@ -198,24 +198,24 @@ class SUNRGBDDataset(Custom3DDataset):
             points = points.numpy()
             points[:, 3:] *= 255
 
-            gt_bboxes = self.get_ann_info(i)['gt_bboxes_3d'].tensor.numpy()
-            pred_bboxes = result['boxes_3d'].tensor.numpy()
-            show_result(points, gt_bboxes.copy(), pred_bboxes.copy(), out_dir,
-                        file_name, show)
+            gt_bboxes = self.get_ann_info(i)['gt_bboxes_3d']
+            gt_corners = gt_bboxes.corners.numpy() if len(gt_bboxes) else None
+            gt_labels = self.get_ann_info(i)['gt_labels_3d']
+            pred_bboxes = result['boxes_3d']
+            pred_corners = pred_bboxes.corners.numpy() if len(pred_bboxes) else None
+            pred_labels = result['labels_3d']
+            show_result(points, gt_corners, gt_labels,
+                        pred_corners, pred_labels, out_dir, file_name, False)
 
             # multi-modality visualization
             if self.modality['use_camera']:
                 img = img.numpy()
                 # need to transpose channel to first dim
                 img = img.transpose(1, 2, 0)
-                pred_bboxes = DepthInstance3DBoxes(
-                    pred_bboxes, origin=(0.5, 0.5, 0))
-                gt_bboxes = DepthInstance3DBoxes(
-                    gt_bboxes, origin=(0.5, 0.5, 0))
                 show_multi_modality_result(
                     img,
-                    gt_bboxes,
-                    pred_bboxes,
+                    gt_bboxes.tensor.numpy(),
+                    pred_bboxes.tensor.numpy(),
                     None,
                     out_dir,
                     file_name,

@@ -189,11 +189,15 @@ class ScanNetDataset(Custom3DDataset):
             data_info = self.data_infos[i]
             pts_path = data_info['pts_path']
             file_name = osp.split(pts_path)[-1].split('.')[0]
-            points = self._extract_data(i, pipeline, 'points').numpy()
-            gt_bboxes = self.get_ann_info(i)['gt_bboxes_3d'].tensor.numpy()
-            pred_bboxes = result['boxes_3d'].tensor.numpy()
-            show_result(points, gt_bboxes, pred_bboxes, out_dir, file_name,
-                        show)
+            points = self._extract_data(i, pipeline, 'points', load_annos=True).numpy()
+            gt_bboxes = self.get_ann_info(i)['gt_bboxes_3d']
+            gt_bboxes = gt_bboxes.corners.numpy() if len(gt_bboxes) else None
+            gt_labels = self.get_ann_info(i)['gt_labels_3d']
+            pred_bboxes = result['boxes_3d']
+            pred_bboxes = pred_bboxes.corners.numpy() if len(pred_bboxes) else None
+            pred_labels = result['labels_3d']
+            show_result(points, gt_bboxes, gt_labels,
+                        pred_bboxes, pred_labels, out_dir, file_name, False)
 
 
 @DATASETS.register_module()

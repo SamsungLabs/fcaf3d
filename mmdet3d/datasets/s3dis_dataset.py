@@ -1,7 +1,7 @@
 import numpy as np
 from os import path as osp
 
-from mmdet3d.core import show_seg_result
+from mmdet3d.core import show_result, show_seg_result
 from mmdet3d.core.bbox import DepthInstance3DBoxes
 from mmdet.datasets import DATASETS
 from mmseg.datasets import DATASETS as SEG_DATASETS
@@ -148,6 +148,32 @@ class S3DISDataset(Custom3DDataset):
             dict(type='Collect3D', keys=['points'])
         ]
         return Compose(pipeline)
+
+    def show(self, results, out_dir, show=True, pipeline=None):
+        """Results visualization.
+
+        Args:
+            results (list[dict]): List of bounding boxes results.
+            out_dir (str): Output directory of visualization result.
+            show (bool): Visualize the results online.
+            pipeline (list[dict], optional): raw data loading for showing.
+                Default: None.
+        """
+        assert out_dir is not None, 'Expect out_dir, got none.'
+        pipeline = self._get_pipeline(pipeline)
+        for i, result in enumerate(results):
+            data_info = self.data_infos[i]
+            pts_path = data_info['pts_path']
+            file_name = osp.split(pts_path)[-1].split('.')[0]
+            points = self._extract_data(i, pipeline, 'points').numpy()
+            gt_bboxes = self.get_ann_info(i)['gt_bboxes_3d']
+            gt_bboxes = gt_bboxes.corners.numpy() if len(gt_bboxes) else None
+            gt_labels = self.get_ann_info(i)['gt_labels_3d']
+            pred_bboxes = result['boxes_3d']
+            pred_bboxes = pred_bboxes.corners.numpy() if len(pred_bboxes) else None
+            pred_labels = result['labels_3d']
+            show_result(points, gt_bboxes, gt_labels,
+                        pred_bboxes, pred_labels, out_dir, file_name, False)
 
 
 class _S3DISSegDataset(Custom3DSegDataset):

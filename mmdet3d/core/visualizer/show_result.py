@@ -1,7 +1,7 @@
 import mmcv
 import numpy as np
-import trimesh
 from os import path as osp
+import matplotlib.pyplot as plt
 
 from .image_vis import (draw_camera_bbox3d_on_img, draw_depth_bbox3d_on_img,
                         draw_lidar_bbox3d_on_img)
@@ -29,7 +29,7 @@ def _write_obj(points, out_filename):
     fout.close()
 
 
-def _write_oriented_bbox(scene_bbox, out_filename):
+def _write_oriented_bbox(corners, labels, out_filename):
     """Export oriented (around Z axis) scene bbox to meshes.
 
     Args:
@@ -39,41 +39,29 @@ def _write_oriented_bbox(scene_bbox, out_filename):
             heading angle of positive Y is 90 degrees.
         out_filename(str): Filename.
     """
-
-    def heading2rotmat(heading_angle):
-        rotmat = np.zeros((3, 3))
-        rotmat[2, 2] = 1
-        cosval = np.cos(heading_angle)
-        sinval = np.sin(heading_angle)
-        rotmat[0:2, 0:2] = np.array([[cosval, -sinval], [sinval, cosval]])
-        return rotmat
-
-    def convert_oriented_box_to_trimesh_fmt(box):
-        ctr = box[:3]
-        lengths = box[3:6]
-        trns = np.eye(4)
-        trns[0:3, 3] = ctr
-        trns[3, 3] = 1.0
-        trns[0:3, 0:3] = heading2rotmat(box[6])
-        box_trimesh_fmt = trimesh.creation.box(lengths, trns)
-        return box_trimesh_fmt
-
-    if len(scene_bbox) == 0:
-        scene_bbox = np.zeros((1, 7))
-    scene = trimesh.scene.Scene()
-    for box in scene_bbox:
-        scene.add_geometry(convert_oriented_box_to_trimesh_fmt(box))
-
-    mesh_list = trimesh.util.concatenate(scene.dump())
-    # save to obj file
-    trimesh.io.export.export_mesh(mesh_list, out_filename, file_type='obj')
-
+    colors = np.multiply([
+        plt.cm.get_cmap('nipy_spectral', 19)((i * 5 + 11) % 18 + 1)[:3] for i in range(18)
+    ], 255).astype(np.uint8).tolist()
+    with open(out_filename, 'w') as file:
+        for i, (corner, label) in enumerate(zip(corners, labels)):
+            c = colors[label]
+            for p in corner:
+                file.write(f'v {p[0]} {p[1]} {p[2]} {c[0]} {c[1]} {c[2]}\n')
+            j = i * 8 + 1
+            for k in [[0, 1, 2, 3], [4, 5, 6, 7], [0, 1, 5, 4],
+                      [2, 3, 7, 6], [3, 0, 4, 7], [1, 2, 6, 5]]:
+                file.write('f')
+                for l in k:
+                    file.write(f' {j + l}')
+                file.write('\n')
     return
 
 
 def show_result(points,
                 gt_bboxes,
+                gt_labels,
                 pred_bboxes,
+                pred_labels,
                 out_dir,
                 filename,
                 show=True,
@@ -108,19 +96,11 @@ def show_result(points,
         _write_obj(points, osp.join(result_path, f'{filename}_points.obj'))
 
     if gt_bboxes is not None:
-        # bottom center to gravity center
-        gt_bboxes[..., 2] += gt_bboxes[..., 5] / 2
-        # the positive direction for yaw in meshlab is clockwise
-        gt_bboxes[:, 6] *= -1
-        _write_oriented_bbox(gt_bboxes,
+        _write_oriented_bbox(gt_bboxes, gt_labels,
                              osp.join(result_path, f'{filename}_gt.obj'))
 
     if pred_bboxes is not None:
-        # bottom center to gravity center
-        pred_bboxes[..., 2] += pred_bboxes[..., 5] / 2
-        # the positive direction for yaw in meshlab is clockwise
-        pred_bboxes[:, 6] *= -1
-        _write_oriented_bbox(pred_bboxes,
+        _write_oriented_bbox(pred_bboxes, pred_labels,
                              osp.join(result_path, f'{filename}_pred.obj'))
 
 
