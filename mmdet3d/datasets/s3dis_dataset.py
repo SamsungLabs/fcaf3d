@@ -165,13 +165,15 @@ class S3DISDataset(Custom3DDataset):
             data_info = self.data_infos[i]
             pts_path = data_info['pts_path']
             file_name = osp.split(pts_path)[-1].split('.')[0]
-            points = self._extract_data(i, pipeline, 'points', load_annos=True).numpy()
+            points = self._extract_data(i, pipeline, 'points').numpy()
             gt_bboxes = self.get_ann_info(i)['gt_bboxes_3d']
+            gt_bboxes = gt_bboxes.corners.numpy() if len(gt_bboxes) else None
             gt_labels = self.get_ann_info(i)['gt_labels_3d']
             pred_bboxes = result['boxes_3d']
+            pred_bboxes = pred_bboxes.corners.numpy() if len(pred_bboxes) else None
             pred_labels = result['labels_3d']
-            show_result(points, gt_bboxes.corners.numpy(), gt_labels,
-                        pred_bboxes.corners.numpy(), pred_labels, out_dir, file_name, False)
+            show_result(points, gt_bboxes, gt_labels,
+                        pred_bboxes, pred_labels, out_dir, file_name, False)
 
 
 class _S3DISSegDataset(Custom3DSegDataset):

@@ -193,17 +193,19 @@ class SUNRGBDDataset(Custom3DDataset):
             pts_path = data_info['pts_path']
             file_name = osp.split(pts_path)[-1].split('.')[0]
             points, img_metas, img = self._extract_data(
-                i, pipeline, ['points', 'img_metas', 'img'], load_annos=True)
+                i, pipeline, ['points', 'img_metas', 'img'])
             # scale colors to [0, 255]
             points = points.numpy()
             points[:, 3:] *= 255
 
             gt_bboxes = self.get_ann_info(i)['gt_bboxes_3d']
+            gt_corners = gt_bboxes.corners.numpy() if len(gt_bboxes) else None
             gt_labels = self.get_ann_info(i)['gt_labels_3d']
             pred_bboxes = result['boxes_3d']
+            pred_corners = pred_bboxes.corners.numpy() if len(pred_bboxes) else None
             pred_labels = result['labels_3d']
-            show_result(points, gt_bboxes.corners.numpy(), gt_labels,
-                        pred_bboxes.corners.numpy(), pred_labels, out_dir, file_name, False)
+            show_result(points, gt_corners, gt_labels,
+                        pred_corners, pred_labels, out_dir, file_name, False)
 
             # multi-modality visualization
             if self.modality['use_camera']:
