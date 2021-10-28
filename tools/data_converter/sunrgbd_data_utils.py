@@ -140,12 +140,12 @@ class SUNRGBDData(object):
         def process_single_scene(sample_idx):
             print(f'{self.split} sample_idx: {sample_idx}')
             # convert depth to points
-            SAMPLE_NUM = 50000
+            # SAMPLE_NUM = 50000
             # TODO: Check whether can move the point
             #  sampling process during training.
             pc_upright_depth = self.get_depth(sample_idx)
-            pc_upright_depth_subsampled = random_sampling(
-                pc_upright_depth, SAMPLE_NUM)
+            pc_upright_depth_subsampled = pc_upright_depth
+            # random_sampling(pc_upright_depth, SAMPLE_NUM)
 
             info = dict()
             pc_info = {'num_features': 6, 'lidar_idx': sample_idx}

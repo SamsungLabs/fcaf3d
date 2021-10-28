@@ -1,160 +1,103 @@
-<div align="center">
-  <img src="resources/mmdet3d-logo.png" width="600"/>
-</div>
+# FCAF3D: Fully Convolutional Anchor-Free 3D Object Detection
 
-[![docs](https://img.shields.io/badge/docs-latest-blue)](https://mmdetection3d.readthedocs.io/en/latest/)
-[![badge](https://github.com/open-mmlab/mmdetection3d/workflows/build/badge.svg)](https://github.com/open-mmlab/mmdetection3d/actions)
-[![codecov](https://codecov.io/gh/open-mmlab/mmdetection3d/branch/master/graph/badge.svg)](https://codecov.io/gh/open-mmlab/mmdetection3d)
-[![license](https://img.shields.io/github/license/open-mmlab/mmdetection3d.svg)](https://github.com/open-mmlab/mmdetection3d/blob/master/LICENSE)
+This repository contains implementation of the 3D object detector FCAF3D, introduced in our paper:
 
+> **FCAF3D: Fully Convolutional Anchor-Free 3D Object Detection**<br>
+> [Danila Rukhovich](https://github.com/filaPro),
+> [Anna Vorontsova](https://github.com/highrut),
+> [Anton Konushin](https://scholar.google.com/citations?user=ZT_k-wMAAAAJ)
+> <br>
+> Samsung AI Center Moscow <br>
+> https://arxiv.org/abs/21??.?????
 
-**News**: We released the codebase v0.15.0.
+<p align="center"><img src="./resources/scannet_map_fps.png" alt="drawing" width="90%"/></p>
 
-In the recent [nuScenes 3D detection challenge](https://www.nuscenes.org/object-detection?externalData=all&mapData=all&modalities=Any) of the 5th AI Driving Olympics in NeurIPS 2020, we obtained the best PKL award and the second runner-up by multi-modality entry, and the best vision-only results.
+### Installation
+For convenience, we provide a [Dockerfile](docker/Dockerfile). Alternatively, you can install all required packages manually.
 
-Code and models for the best vision-only method, [FCOS3D](https://arxiv.org/abs/2104.10956), have been released. Please stay tuned for [MoCa](https://arxiv.org/abs/2012.12741).
+This implementation is based on [mmdetection3d](https://github.com/open-mmlab/mmdetection3d) framework.
+Please refer to the original installation guide [install.md](docs/install.md), replacing `open-mmlab/mmdetection3d` with `saic-vul/fcaf3d`.
+Also, [MinkowskiEngine](https://github.com/NVIDIA/MinkowskiEngine) and [rotated_iou](https://github.com/lilanxiao/Rotated_IoU) should be installed with [these](https://github.com/saic-vul/fcaf3d/blob/master/docker/Dockerfile#L35-L38) 4 commands.
 
-Documentation: https://mmdetection3d.readthedocs.io/
+Most of the `FCAF3D`-related code locates in the following files: 
+[detectors/single_stage_sparse.py](mmdet3d/models/detectors/single_stage_sparse.py),
+[necks/fcaf3d_neck_with_head.py](mmdet3d/models/dense_heads/fcaf3d_neck_with_head.py),
+[backbones/me_resnet.py](mmdet3d/models/backbones/me_resnet.py).
 
-## Introduction
+### Getting Started
 
-English | [简体中文](README_zh-CN.md)
+Please see [getting_started.md](docs/getting_started.md) for basic usage examples.
+We use data preparation from `mmdetection3d`, following documentation in [scannet](data/scannet), [sunrgbd](data/sunrgbd) and [s3dis](data/s3dis).
+The only difference is [disabling](https://github.com/saic-vul/fcaf3d/blob/master/tools/data_converter/sunrgbd_data_utils.py#L143) sampling 50000 points for `SUN RGB-D` on this step to use all points further.
 
-The master branch works with **PyTorch 1.3+**.
+**Training**
 
-MMDetection3D is an open source object detection toolbox based on PyTorch, towards the next-generation platform for general 3D detection. It is
-a part of the OpenMMLab project developed by [MMLab](http://mmlab.ie.cuhk.edu.hk/).
-
-![demo image](resources/mmdet3d_outdoor_demo.gif)
-
-### Major features
-
-- **Support multi-modality/single-modality detectors out of box**
-
-  It directly supports multi-modality/single-modality detectors including MVXNet, VoteNet, PointPillars, etc.
-
-- **Support indoor/outdoor 3D detection out of box**
-
-  It directly supports popular indoor and outdoor 3D detection datasets, including ScanNet, SUNRGB-D, Waymo, nuScenes, Lyft, and KITTI.
-  For nuScenes dataset, we also support [nuImages dataset](https://github.com/open-mmlab/mmdetection3d/tree/master/configs/nuimages).
-
-- **Natural integration with 2D detection**
-
-  All the about **300+ models, methods of 40+ papers**, and modules supported in [MMDetection](https://github.com/open-mmlab/mmdetection/blob/master/docs/model_zoo.md) can be trained or used in this codebase.
-
-- **High efficiency**
-
-  It trains faster than other codebases. The main results are as below. Details can be found in [benchmark.md](./docs/benchmarks.md). We compare the number of samples trained per second (the higher, the better). The models that are not supported by other codebases are marked by `×`.
-
-  | Methods | MMDetection3D | [OpenPCDet](https://github.com/open-mmlab/OpenPCDet) |[votenet](https://github.com/facebookresearch/votenet)| [Det3D](https://github.com/poodarchu/Det3D) |
-  |:-------:|:-------------:|:---------:|:-----:|:-----:|
-  | VoteNet | 358           | ×         |   77  | ×     |
-  | PointPillars-car| 141           | ×         |   ×  | 140     |
-  | PointPillars-3class| 107           |44     |   ×      | ×    |
-  | SECOND| 40           |30     |   ×      | ×    |
-  | Part-A2| 17           |14     |   ×      | ×    |
-
-Like [MMDetection](https://github.com/open-mmlab/mmdetection) and [MMCV](https://github.com/open-mmlab/mmcv), MMDetection3D can also be used as a library to support different projects on top of it.
-
-## License
-
-This project is released under the [Apache 2.0 license](LICENSE).
-
-## Changelog
-
-v0.15.0 was released in 1/7/2021.
-Please refer to [changelog.md](docs/changelog.md) for details and release history.
-
-## Benchmark and model zoo
-
-Supported methods and backbones are shown in the below table.
-Results and models are available in the [model zoo](docs/model_zoo.md).
-
-Support backbones:
-
-- [x] PointNet (CVPR'2017)
-- [x] PointNet++ (NeurIPS'2017)
-- [x] RegNet (CVPR'2020)
-
-Support methods
-
-- [x] [SECOND (Sensor'2018)](configs/second/README.md)
-- [x] [PointPillars (CVPR'2019)](configs/pointpillars/README.md)
-- [x] [FreeAnchor (NeurIPS'2019)](configs/free_anchor/README.md)
-- [x] [VoteNet (ICCV'2019)](configs/votenet/README.md)
-- [x] [H3DNet (ECCV'2020)](configs/h3dnet/README.md)
-- [x] [3DSSD (CVPR'2020)](configs/3dssd/README.md)
-- [x] [Part-A2 (TPAMI'2020)](configs/parta2/README.md)
-- [x] [MVXNet (ICRA'2019)](configs/mvxnet/README.md)
-- [x] [CenterPoint (CVPR'2021)](configs/centerpoint/README.md)
-- [x] [SSN (ECCV'2020)](configs/ssn/README.md)
-- [x] [ImVoteNet (CVPR'2020)](configs/imvotenet/README.md)
-- [x] [FCOS3D (Arxiv'2021)](configs/fcos3d/README.md)
-- [x] [PointNet++ (NeurIPS'2017)](configs/pointnet2/README.md)
-
-|                    | ResNet   | ResNeXt  | SENet    |PointNet++ | HRNet | RegNetX | Res2Net |
-|--------------------|:--------:|:--------:|:--------:|:---------:|:-----:|:--------:|:-----:|
-| SECOND             | ☐        | ☐        | ☐        | ✗         | ☐     | ✓        | ☐     |
-| PointPillars       | ☐        | ☐        | ☐        | ✗         | ☐     | ✓        | ☐     |
-| FreeAnchor         | ☐        | ☐        | ☐        | ✗         | ☐     | ✓        | ☐     |
-| VoteNet            | ✗        | ✗        | ✗        | ✓         | ✗     | ✗        | ✗     |
-| H3DNet            | ✗        | ✗        | ✗        | ✓         | ✗     | ✗        | ✗     |
-| 3DSSD            | ✗        | ✗        | ✗        | ✓         | ✗     | ✗        | ✗     |
-| Part-A2            | ☐        | ☐        | ☐        | ✗         | ☐     | ✓        | ☐     |
-| MVXNet             | ☐        | ☐        | ☐        | ✗         | ☐     | ✓        | ☐     |
-| CenterPoint        | ☐        | ☐        | ☐        | ✗         | ☐     | ✓        | ☐     |
-| SSN                | ☐        | ☐        | ☐        | ✗         | ☐     | ✓        | ☐     |
-| ImVoteNet            | ✗        | ✗        | ✗        | ✓         | ✗     | ✗        | ✗     |
-| FCOS3D               | ✓        | ☐        | ☐        | ✗         | ☐     | ☐        | ☐     |
-| PointNet++           | ✗        | ✗        | ✗        | ✓         | ✗     | ✗        | ✗     |
-
-Other features
-- [x] [Dynamic Voxelization](configs/dynamic_voxelization/README.md)
-
-**Note:** All the about **300+ models, methods of 40+ papers** in 2D detection supported by [MMDetection](https://github.com/open-mmlab/mmdetection/blob/master/docs/model_zoo.md) can be trained or used in this codebase.
-
-## Installation
-
-Please refer to [getting_started.md](docs/getting_started.md) for installation.
-
-## Get Started
-
-Please see [getting_started.md](docs/getting_started.md) for the basic usage of MMDetection3D. We provide guidance for quick run [with existing dataset](docs/1_exist_data_model.md) and [with customized dataset](docs/2_new_data_model.md) for beginners. There are also tutorials for [learning configuration systems](docs/tutorials/config.md), [adding new dataset](docs/tutorials/customize_dataset.md), [designing data pipeline](docs/tutorials/data_pipeline.md), [customizing models](docs/tutorials/customize_models.md), [customizing runtime settings](docs/tutorials/customize_runtime.md) and [Waymo dataset](docs/datasets/waymo_det.md).
-
-Please refer to [FAQ](docs/faq.md) for frequently asked questions. When updating the version of MMDetection3D, please also check the [compatibility doc](docs/compatibility.md) to be aware of the BC-breaking updates introduced in each version.
-
-## Citation
-
-If you find this project useful in your research, please consider cite:
-
-```latex
-@misc{mmdet3d2020,
-    title={{MMDetection3D: OpenMMLab} next-generation platform for general {3D} object detection},
-    author={MMDetection3D Contributors},
-    howpublished = {\url{https://github.com/open-mmlab/mmdetection3d}},
-    year={2020}
-}
+To start training, run [dist_train](tools/dist_train.sh) with `FCAF3D` [configs](configs/fcaf3d):
+```shell
+bash tools/dist_train.sh configs/fcaf3d/fcaf3d_scannet-3d-18class.py 2
 ```
 
-## Contributing
+**Testing**
 
-We appreciate all contributions to improve MMDetection3D. Please refer to [CONTRIBUTING.md](.github/CONTRIBUTING.md) for the contributing guideline.
+Test pre-trained model using [dist_test](tools/dist_test.sh) with `FCAF3D` [configs](configs/fcaf3d):
+```shell
+bash tools/dist_test.sh configs/fcaf3d/fcaf3d_scannet-3d-18class.py \
+    work_dirs/fcaf3d_scannet-3d-18class/latest.pth 2 --eval mAP
+```
 
-## Acknowledgement
+**Visualization**
 
-MMDetection3D is an open source project that is contributed by researchers and engineers from various colleges and companies. We appreciate all the contributors as well as users who give valuable feedbacks.
-We wish that the toolbox and benchmark could serve the growing research community by providing a flexible toolkit to reimplement existing methods and develop their own new 3D detectors.
+Visualizations can be created with [test](tools/test.py) script. 
+For better visualizations, you may set `score_thr` in configs to `0.20`:
+```shell
+python tools/test.py configs/fcaf3d/fcaf3d_scannet-3d-18class.py \
+    work_dirs/fcaf3d_scannet-3d-18class/latest.pth --show \
+    --show-dir work_dirs/fcaf3d_scannet-3d-18class
+```
 
-## Projects in OpenMMLab
+### Models
 
-- [MMCV](https://github.com/open-mmlab/mmcv): OpenMMLab foundational library for computer vision.
-- [MMClassification](https://github.com/open-mmlab/mmclassification): OpenMMLab image classification toolbox and benchmark.
-- [MMDetection](https://github.com/open-mmlab/mmdetection): OpenMMLab detection toolbox and benchmark.
-- [MMDetection3D](https://github.com/open-mmlab/mmdetection3d): OpenMMLab next-generation platform for general 3D object detection.
-- [MMSegmentation](https://github.com/open-mmlab/mmsegmentation): OpenMMLab semantic segmentation toolbox and benchmark.
-- [MMAction2](https://github.com/open-mmlab/mmaction2): OpenMMLab's next-generation action understanding toolbox and benchmark.
-- [MMTracking](https://github.com/open-mmlab/mmtracking): OpenMMLab video perception toolbox and benchmark.
-- [MMPose](https://github.com/open-mmlab/mmpose): OpenMMLab pose estimation toolbox and benchmark.
-- [MMEditing](https://github.com/open-mmlab/mmediting): OpenMMLab image and video editing toolbox.
-- [MMOCR](https://github.com/open-mmlab/mmocr): OpenMMLab text detection, recognition and understanding toolbox.
-- [MMGeneration](https://github.com/open-mmlab/mmgeneration): OpenMMLab image and video generative models toolbox.
+The metrics are given for 5 training runs followed by 5 test runs. Average values are is round brackets.
+
+For `VoteNet` and `ImVoteNet` we provide the configs and checkpoints with our Mobius angle parametrization.
+We also remove 4 losses in favour of rotated IoU loss. 
+`ImVoxelNet` ablations can be done directly in [imvoxelnet](https://github.com/saic-vul/imvoxelnet) repository as it is not supported for indoor scenes in `mmdetection3d`.
+
+**FCAF3D**
+
+| Dataset   | mAP@0.25 | mAP@0.5 | Download |
+|:---------:|:--------:|:-------:|:--------:|
+| ScanNet | 71.5 (70.7) | 57.3 (56.0) | [model](https://github.com/saic-vul/fcaf3d/releases/download/v1.0/2021????_??????.pth) &#124; [log](https://github.com/saic-vul/fcaf3d/releases/download/v1.0/2021????_fcaf3d_scannet.log) &#124; [config](configs/fcaf3d/fcaf3d_scannet-3d-18class.py) |
+| SUN RGB-D | 64.2 (63.8) | 48.9 (48.2) | [model](https://github.com/saic-vul/fcaf3d/releases/download/v1.0/2021????_??????.pth) &#124; [log](https://github.com/saic-vul/fcaf3d/releases/download/v1.0/2021????_fcaf3d_sunrgbd.log) &#124; [config](configs/fcaf3d/fcaf3d_sunrgbd-3d-10class.py) |
+| S3DIS | 66.7 (64.9) | 45.9 (43.8) | [model](https://github.com/saic-vul/fcaf3d/releases/download/v1.0/2021????_??????.pth) &#124; [log](https://github.com/saic-vul/fcaf3d/releases/download/v1.0/2021????_fcaf3d_s3dis.log) &#124; [config](configs/fcaf3d/fcaf3d_s3dis-3d-5class.py) |
+
+
+**VoteNet on SUN RGB-D**
+
+| Source   | mAP@0.25 | mAP@0.5 | Download |
+|:---------:|:--------:|:-------:|:--------:|
+| mmdetection3d | 59.1 | 35.8| [instruction](configs/votenet) |
+| ours | 61.1 (60.5) | 40.4 (39.5) | [model](https://github.com/saic-vul/fcaf3d/releases/download/v1.0/2021????_??????.pth) &#124; [log](https://github.com/saic-vul/fcaf3d/releases/download/v1.0/2021????_votenet_sunrgbd.log) &#124; [config](configs/votenet/votenet-v2_16x8_sunrgbd-3d-10class.py) |
+
+**ImVoteNet on SUN RGB-D**
+
+| Source   | mAP@0.25 | mAP@0.5 | Download |
+|:---------:|:--------:|:-------:|:--------:|
+| mmdetection3d | 64.0 | 37.8 | [instruction](configs/imvotenet) |
+| ours | 64.6 (64.1) | 40.8 (39.8) | [model](https://github.com/saic-vul/fcaf3d/releases/download/v1.0/2021????_??????.pth) &#124; [log](https://github.com/saic-vul/fcaf3d/releases/download/v1.0/2021????_imvotenet_sunrgbd.log) &#124; [config](configs/imvotenet/imvotenet-v2_stage2_16x8_sunrgbd-3d-10class.py) |
+
+### Example Detections
+
+<p align="center"><img src="./resources/github.png" alt="drawing" width="90%"/></p>
+
+### Citation
+
+If you find this work useful for your research, please cite our paper:
+```
+@article{rukhovich2021fcaf3d,
+  title={FCAF3D: Fully Convolutional Anchor-Free 3D Object Detection},
+  author={Danila Rukhovich, Anna Vorontsova, Anton Konushin},
+  journal={arXiv preprint arXiv:21??.?????},
+  year={2021}
+}
+```
