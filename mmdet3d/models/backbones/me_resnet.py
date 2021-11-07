@@ -11,13 +11,9 @@ class ResNetBase(nn.Module):
     INIT_DIM = 64
     PLANES = (64, 128, 256, 512)
 
-    def __init__(self, in_channels):
-        nn.Module.__init__(self)
-        assert self.BLOCK is not None
-
-        self.init_layers(in_channels)
-
-    def init_layers(self, in_channels):
+    def __init__(self, in_channels, n_outs):
+        super(ResNetBase, self).__init__()
+        self.n_outs = n_outs
         self.inplanes = self.INIT_DIM
         self.conv1 = nn.Sequential(
             ME.MinkowskiConvolution(
@@ -31,15 +27,18 @@ class ResNetBase(nn.Module):
         self.layer1 = self._make_layer(
             self.BLOCK, self.PLANES[0], self.LAYERS[0], stride=2
         )
-        self.layer2 = self._make_layer(
-            self.BLOCK, self.PLANES[1], self.LAYERS[1], stride=2
-        )
-        self.layer3 = self._make_layer(
-            self.BLOCK, self.PLANES[2], self.LAYERS[2], stride=2
-        )
-        self.layer4 = self._make_layer(
-            self.BLOCK, self.PLANES[3], self.LAYERS[3], stride=2
-        )
+        if n_outs > 1:
+            self.layer2 = self._make_layer(
+                self.BLOCK, self.PLANES[1], self.LAYERS[1], stride=2
+            )
+        if n_outs > 2:
+            self.layer3 = self._make_layer(
+                self.BLOCK, self.PLANES[2], self.LAYERS[2], stride=2
+            )
+        if n_outs > 3:
+            self.layer4 = self._make_layer(
+                self.BLOCK, self.PLANES[3], self.LAYERS[3], stride=2
+            )
 
     def init_weights(self):
         for m in self.modules():
@@ -85,10 +84,16 @@ class ResNetBase(nn.Module):
         x = self.conv1(x)
         x = self.layer1(x)
         outs.append(x)
+        if self.n_outs == 1:
+            return outs
         x = self.layer2(x)
         outs.append(x)
+        if self.n_outs == 2:
+            return outs
         x = self.layer3(x)
         outs.append(x)
+        if self.n_outs == 3:
+            return outs
         x = self.layer4(x)
         outs.append(x)
         return outs
@@ -96,7 +101,7 @@ class ResNetBase(nn.Module):
 
 @BACKBONES.register_module()
 class MEResNet3D(ResNetBase):
-    def __init__(self, in_channels, depth):
+    def __init__(self, in_channels, depth, n_outs=4):
         if depth == 14:
             self.BLOCK = BasicBlock
             self.LAYERS = (1, 1, 1, 1)
@@ -115,4 +120,4 @@ class MEResNet3D(ResNetBase):
         else:
             raise ValueError(f'invalid depth={depth}')
 
-        super(MEResNet3D, self).__init__(in_channels)
+        super(MEResNet3D, self).__init__(in_channels, n_outs)

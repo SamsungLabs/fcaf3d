@@ -10,8 +10,6 @@ This repository contains implementation of the 3D object detector FCAF3D, introd
 > Samsung AI Center Moscow <br>
 > https://arxiv.org/abs/21??.?????
 
-<p align="center"><img src="./resources/scannet_map_fps.png" alt="drawing" width="90%"/></p>
-
 ### Installation
 For convenience, we provide a [Dockerfile](docker/Dockerfile). Alternatively, you can install all required packages manually.
 
@@ -28,7 +26,7 @@ Most of the `FCAF3D`-related code locates in the following files:
 
 Please see [getting_started.md](docs/getting_started.md) for basic usage examples.
 We use data preparation from `mmdetection3d`, following documentation in [scannet](data/scannet), [sunrgbd](data/sunrgbd) and [s3dis](data/s3dis).
-The only difference is [disabling](https://github.com/saic-vul/fcaf3d/blob/master/tools/data_converter/sunrgbd_data_utils.py#L143) sampling 50000 points for `SUN RGB-D` on this step to use all points further.
+The only difference is [disabling](tools/data_converter/sunrgbd_data_utils.py#L143) sampling 50000 points for `SUN RGB-D` on this step to use all points further.
 
 **Training**
 
@@ -62,29 +60,42 @@ The metrics are given for 5 training runs followed by 5 test runs. Average value
 For `VoteNet` and `ImVoteNet` we provide the configs and checkpoints with our Mobius angle parametrization.
 We also remove 4 losses in favour of rotated IoU loss. 
 `ImVoxelNet` ablations can be done directly in [imvoxelnet](https://github.com/saic-vul/imvoxelnet) repository as it is not supported for indoor scenes in `mmdetection3d`.
+Inference speed in scenes per second is measured on a single NVidia GTX1080Ti.
 
 **FCAF3D**
 
 | Dataset   | mAP@0.25 | mAP@0.5 | Download |
 |:---------:|:--------:|:-------:|:--------:|
-| ScanNet | 71.5 (70.7) | 57.3 (56.0) | [model](https://github.com/saic-vul/fcaf3d/releases/download/v1.0/2021????_??????.pth) &#124; [log](https://github.com/saic-vul/fcaf3d/releases/download/v1.0/2021????_fcaf3d_scannet.log) &#124; [config](configs/fcaf3d/fcaf3d_scannet-3d-18class.py) |
-| SUN RGB-D | 64.2 (63.8) | 48.9 (48.2) | [model](https://github.com/saic-vul/fcaf3d/releases/download/v1.0/2021????_??????.pth) &#124; [log](https://github.com/saic-vul/fcaf3d/releases/download/v1.0/2021????_fcaf3d_sunrgbd.log) &#124; [config](configs/fcaf3d/fcaf3d_sunrgbd-3d-10class.py) |
-| S3DIS | 66.7 (64.9) | 45.9 (43.8) | [model](https://github.com/saic-vul/fcaf3d/releases/download/v1.0/2021????_??????.pth) &#124; [log](https://github.com/saic-vul/fcaf3d/releases/download/v1.0/2021????_fcaf3d_s3dis.log) &#124; [config](configs/fcaf3d/fcaf3d_s3dis-3d-5class.py) |
+| ScanNet | 71.5 (70.7) | 57.3 (56.0) | [model](https://github.com/saic-vul/fcaf3d/releases/download/v1.0/20211007_144747.pth) &#124; [log](https://github.com/saic-vul/fcaf3d/releases/download/v1.0/20211007_144747_fcaf3d_scannet.log) &#124; [config](configs/fcaf3d/fcaf3d_scannet-3d-18class.py) |
+| SUN RGB-D | 64.2 (63.8) | 48.9 (48.2) | [model](https://github.com/saic-vul/fcaf3d/releases/download/v1.0/20211007_144908.pth) &#124; [log](https://github.com/saic-vul/fcaf3d/releases/download/v1.0/20211007_144908_fcaf3d_sunrgbd.log) &#124; [config](configs/fcaf3d/fcaf3d_sunrgbd-3d-10class.py) |
+| S3DIS | 66.7 (64.9) | 45.9 (43.8) | [model](https://github.com/saic-vul/fcaf3d/releases/download/v1.0/20211011_084059.pth) &#124; [log](https://github.com/saic-vul/fcaf3d/releases/download/v1.0/20211011_084059_fcaf3d_s3dis.log) &#124; [config](configs/fcaf3d/fcaf3d_s3dis-3d-5class.py) |
 
+
+**Faster FCAF3D on ScanNet**
+
+| Backbone | Voxel <br> size | mAP@0.25 | mAP@0.5 | Scenes <br> per sec. | Download |
+|:--------:|:---------------:|:--------:|:-------:|:--------------------:|:--------:|
+| HDResNet34 | 0.01 | 70.7 | 56.0 | 8.0 | see table above |
+| HDResNet34:3 | 0.01 | 69.8 | 53.6 | 12.2 | [model](https://github.com/saic-vul/fcaf3d/releases/download/v1.0/20211008_191702.pth) &#124; [log](https://github.com/saic-vul/fcaf3d/releases/download/v1.0/20211008_191702_fcaf3d_3scales_scannet.log) &#124; [config](configs/fcaf3d/fcaf3d_3scales_scannet-3d-18class.py) |
+| HDResNet34:2 | 0.02 | 63.1 | 46.8 | 31.5 | [model](https://github.com/saic-vul/fcaf3d/releases/download/v1.0/20211008_151041.pth) &#124; [log](https://github.com/saic-vul/fcaf3d/releases/download/v1.0/20211008_151041_fcaf3d_2scales_scannet.log) &#124; [config](configs/fcaf3d/fcaf3d_2scales_scannet-3d-18class.py) |
 
 **VoteNet on SUN RGB-D**
 
 | Source   | mAP@0.25 | mAP@0.5 | Download |
 |:---------:|:--------:|:-------:|:--------:|
 | mmdetection3d | 59.1 | 35.8| [instruction](configs/votenet) |
-| ours | 61.1 (60.5) | 40.4 (39.5) | [model](https://github.com/saic-vul/fcaf3d/releases/download/v1.0/2021????_??????.pth) &#124; [log](https://github.com/saic-vul/fcaf3d/releases/download/v1.0/2021????_votenet_sunrgbd.log) &#124; [config](configs/votenet/votenet-v2_16x8_sunrgbd-3d-10class.py) |
+| ours | 61.1 (60.5) | 40.4 (39.5) | [model](https://github.com/saic-vul/fcaf3d/releases/download/v1.0/20211016_132950.pth) &#124; [log](https://github.com/saic-vul/fcaf3d/releases/download/v1.0/20211016_132950_votenet_sunrgbd.log) &#124; [config](configs/votenet/votenet-v2_16x8_sunrgbd-3d-10class.py) |
 
 **ImVoteNet on SUN RGB-D**
 
 | Source   | mAP@0.25 | mAP@0.5 | Download |
 |:---------:|:--------:|:-------:|:--------:|
 | mmdetection3d | 64.0 | 37.8 | [instruction](configs/imvotenet) |
-| ours | 64.6 (64.1) | 40.8 (39.8) | [model](https://github.com/saic-vul/fcaf3d/releases/download/v1.0/2021????_??????.pth) &#124; [log](https://github.com/saic-vul/fcaf3d/releases/download/v1.0/2021????_imvotenet_sunrgbd.log) &#124; [config](configs/imvotenet/imvotenet-v2_stage2_16x8_sunrgbd-3d-10class.py) |
+| ours | 64.6 (64.1) | 40.8 (39.8) | [model](https://github.com/saic-vul/fcaf3d/releases/download/v1.0/20211009_131500.pth) &#124; [log](https://github.com/saic-vul/fcaf3d/releases/download/v1.0/20211009_131500_imvotenet_sunrgbd.log) &#124; [config](configs/imvotenet/imvotenet-v2_stage2_16x8_sunrgbd-3d-10class.py) |
+
+**Comparison with state-of-the-art on ScanNet**
+
+<p align="center"><img src="./resources/scannet_map_fps.png" alt="drawing" width="50%"/></p>
 
 ### Example Detections
 
