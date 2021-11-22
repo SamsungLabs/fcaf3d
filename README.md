@@ -1,4 +1,4 @@
-# FCAF3D: Fully Convolutional Anchor-Free 3D Object Detection
+## FCAF3D: Fully Convolutional Anchor-Free 3D Object Detection
 
 This repository contains implementation of the 3D object detector FCAF3D, introduced in our paper:
 
@@ -11,10 +11,10 @@ This repository contains implementation of the 3D object detector FCAF3D, introd
 > https://arxiv.org/abs/21??.?????
 
 ### Installation
-For convenience, we provide a [Dockerfile](docker/Dockerfile). Alternatively, you can install all required packages manually.
+For convenience, we provide a [Dockerfile](docker/Dockerfile).
 
-This implementation is based on [mmdetection3d](https://github.com/open-mmlab/mmdetection3d) framework.
-Please refer to the original installation guide [install.md](docs/install.md), replacing `open-mmlab/mmdetection3d` with `saic-vul/fcaf3d`.
+Alternatively, you can install all required packages manually. This implementation is based on [mmdetection3d](https://github.com/open-mmlab/mmdetection3d) framework.
+Please refer to the original installation guide [getting_started.md](docs/getting_started.md), replacing `open-mmlab/mmdetection3d` with `saic-vul/fcaf3d`.
 Also, [MinkowskiEngine](https://github.com/NVIDIA/MinkowskiEngine) and [rotated_iou](https://github.com/lilanxiao/Rotated_IoU) should be installed with [these](https://github.com/saic-vul/fcaf3d/blob/master/docker/Dockerfile#L35-L38) 4 commands.
 
 Most of the `FCAF3D`-related code locates in the following files: 
@@ -64,8 +64,8 @@ Inference speed in scenes per second is measured on a single NVidia GTX1080Ti.
 
 **FCAF3D**
 
-| Dataset   | mAP@0.25 | mAP@0.5 | Download |
-|:---------:|:--------:|:-------:|:--------:|
+| Dataset | mAP@0.25 | mAP@0.5 | Download |
+|:-------:|:--------:|:-------:|:--------:|
 | ScanNet | 71.5 (70.7) | 57.3 (56.0) | [model](https://github.com/saic-vul/fcaf3d/releases/download/v1.0/20211007_144747.pth) &#124; [log](https://github.com/saic-vul/fcaf3d/releases/download/v1.0/20211007_144747_fcaf3d_scannet.log) &#124; [config](configs/fcaf3d/fcaf3d_scannet-3d-18class.py) |
 | SUN RGB-D | 64.2 (63.8) | 48.9 (48.2) | [model](https://github.com/saic-vul/fcaf3d/releases/download/v1.0/20211007_144908.pth) &#124; [log](https://github.com/saic-vul/fcaf3d/releases/download/v1.0/20211007_144908_fcaf3d_sunrgbd.log) &#124; [config](configs/fcaf3d/fcaf3d_sunrgbd-3d-10class.py) |
 | S3DIS | 66.7 (64.9) | 45.9 (43.8) | [model](https://github.com/saic-vul/fcaf3d/releases/download/v1.0/20211011_084059.pth) &#124; [log](https://github.com/saic-vul/fcaf3d/releases/download/v1.0/20211011_084059_fcaf3d_s3dis.log) &#124; [config](configs/fcaf3d/fcaf3d_s3dis-3d-5class.py) |
@@ -81,15 +81,15 @@ Inference speed in scenes per second is measured on a single NVidia GTX1080Ti.
 
 **VoteNet on SUN RGB-D**
 
-| Source   | mAP@0.25 | mAP@0.5 | Download |
-|:---------:|:--------:|:-------:|:--------:|
+| Source | mAP@0.25 | mAP@0.5 | Download |
+|:------:|:--------:|:-------:|:--------:|
 | mmdetection3d | 59.1 | 35.8| [instruction](configs/votenet) |
 | ours | 61.1 (60.5) | 40.4 (39.5) | [model](https://github.com/saic-vul/fcaf3d/releases/download/v1.0/20211016_132950.pth) &#124; [log](https://github.com/saic-vul/fcaf3d/releases/download/v1.0/20211016_132950_votenet_sunrgbd.log) &#124; [config](configs/votenet/votenet-v2_16x8_sunrgbd-3d-10class.py) |
 
 **ImVoteNet on SUN RGB-D**
 
-| Source   | mAP@0.25 | mAP@0.5 | Download |
-|:---------:|:--------:|:-------:|:--------:|
+| Source | mAP@0.25 | mAP@0.5 | Download |
+|:------:|:--------:|:-------:|:--------:|
 | mmdetection3d | 64.0 | 37.8 | [instruction](configs/imvotenet) |
 | ours | 64.6 (64.1) | 40.8 (39.8) | [model](https://github.com/saic-vul/fcaf3d/releases/download/v1.0/20211009_131500.pth) &#124; [log](https://github.com/saic-vul/fcaf3d/releases/download/v1.0/20211009_131500_imvotenet_sunrgbd.log) &#124; [config](configs/imvotenet/imvotenet-v2_stage2_16x8_sunrgbd-3d-10class.py) |
 
