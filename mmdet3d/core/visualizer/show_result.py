@@ -30,13 +30,12 @@ def _write_obj(points, out_filename):
 
 
 def _write_oriented_bbox(corners, labels, out_filename):
-    """Export oriented (around Z axis) scene bbox to meshes.
+    """Export corners and labels to .obj file for meshlab.
 
     Args:
-        scene_bbox(list[ndarray] or ndarray): xyz pos of center and
-            3 lengths (dx,dy,dz) and heading angle around Z axis.
-            Y forward, X right, Z upward. heading angle of positive X is 0,
-            heading angle of positive Y is 90 degrees.
+        corners(list[ndarray] or ndarray): [B x 8 x 3] corners of
+            boxes for each scene
+        labels(list[int]): labels of boxes for each scene
         out_filename(str): Filename.
     """
     colors = np.multiply([
