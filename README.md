@@ -1,3 +1,7 @@
+[![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/fcaf3d-fully-convolutional-anchor-free-3d/3d-object-detection-on-scannetv2)](https://paperswithcode.com/sota/3d-object-detection-on-scannetv2?p=fcaf3d-fully-convolutional-anchor-free-3d)
+[![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/fcaf3d-fully-convolutional-anchor-free-3d/3d-object-detection-on-sun-rgbd-val)](https://paperswithcode.com/sota/3d-object-detection-on-sun-rgbd-val?p=fcaf3d-fully-convolutional-anchor-free-3d)
+[![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/fcaf3d-fully-convolutional-anchor-free-3d/3d-object-detection-on-s3dis)](https://paperswithcode.com/sota/3d-object-detection-on-s3dis?p=fcaf3d-fully-convolutional-anchor-free-3d)
+
 ## FCAF3D: Fully Convolutional Anchor-Free 3D Object Detection
 
 This repository contains implementation of the 3D object detector FCAF3D, introduced in our paper:
@@ -8,7 +12,7 @@ This repository contains implementation of the 3D object detector FCAF3D, introd
 > [Anton Konushin](https://scholar.google.com/citations?user=ZT_k-wMAAAAJ)
 > <br>
 > Samsung AI Center Moscow <br>
-> https://arxiv.org/abs/21??.?????
+> https://arxiv.org/abs/2112.00322
 
 ### Installation
 For convenience, we provide a [Dockerfile](docker/Dockerfile).
@@ -108,7 +112,7 @@ If you find this work useful for your research, please cite our paper:
 @article{rukhovich2021fcaf3d,
   title={FCAF3D: Fully Convolutional Anchor-Free 3D Object Detection},
   author={Danila Rukhovich, Anna Vorontsova, Anton Konushin},
-  journal={arXiv preprint arXiv:21??.?????},
+  journal={arXiv preprint arXiv:2112.00322},
   year={2021}
 }
 ```
