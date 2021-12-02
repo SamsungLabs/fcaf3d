@@ -4,7 +4,7 @@
 
 ## FCAF3D: Fully Convolutional Anchor-Free 3D Object Detection
 
-This repository contains implementation of the 3D object detector FCAF3D, introduced in our paper:
+This repository contains an implementation of FCAF3D, a 3D object detection method introduced in our paper:
 
 > **FCAF3D: Fully Convolutional Anchor-Free 3D Object Detection**<br>
 > [Danila Rukhovich](https://github.com/filaPro),
@@ -19,7 +19,7 @@ For convenience, we provide a [Dockerfile](docker/Dockerfile).
 
 Alternatively, you can install all required packages manually. This implementation is based on [mmdetection3d](https://github.com/open-mmlab/mmdetection3d) framework.
 Please refer to the original installation guide [getting_started.md](docs/getting_started.md), replacing `open-mmlab/mmdetection3d` with `samsunglabs/fcaf3d`.
-Also, [MinkowskiEngine](https://github.com/NVIDIA/MinkowskiEngine) and [rotated_iou](https://github.com/lilanxiao/Rotated_IoU) should be installed with [these](https://github.com/samsunglabs/fcaf3d/blob/master/docker/Dockerfile#L35-L38) 4 commands.
+Also, [MinkowskiEngine](https://github.com/NVIDIA/MinkowskiEngine) and [rotated_iou](https://github.com/lilanxiao/Rotated_IoU) should be installed with [these](https://github.com/samsunglabs/fcaf3d/blob/master/docker/Dockerfile#L35-L38) commands.
 
 Most of the `FCAF3D`-related code locates in the following files: 
 [detectors/single_stage_sparse.py](mmdet3d/models/detectors/single_stage_sparse.py),
@@ -29,8 +29,8 @@ Most of the `FCAF3D`-related code locates in the following files:
 ### Getting Started
 
 Please see [getting_started.md](docs/getting_started.md) for basic usage examples.
-We use data preparation from `mmdetection3d`, following documentation in [scannet](data/scannet), [sunrgbd](data/sunrgbd) and [s3dis](data/s3dis).
-The only difference is [disabling](tools/data_converter/sunrgbd_data_utils.py#L143) sampling 50000 points for `SUN RGB-D` on this step to use all points further.
+We follow the `mmdetection3d` data preparation protocol described in [scannet](data/scannet), [sunrgbd](data/sunrgbd), and [s3dis](data/s3dis).
+The only difference is that we [do not sample](tools/data_converter/sunrgbd_data_utils.py#L143) 50,000 points from each point cloud in `SUN RGB-D`, using all points.
 
 **Training**
 
@@ -59,12 +59,11 @@ python tools/test.py configs/fcaf3d/fcaf3d_scannet-3d-18class.py \
 
 ### Models
 
-The metrics are given for 5 training runs followed by 5 test runs. Average values are is round brackets.
+The metrics are obtained in 5 training runs followed by 5 test runs. We report both the best and the average values (the latter are given in round brackets).
 
-For `VoteNet` and `ImVoteNet` we provide the configs and checkpoints with our Mobius angle parametrization.
-We also remove 4 losses in favour of rotated IoU loss. 
-`ImVoxelNet` ablations can be done directly in [imvoxelnet](https://github.com/saic-vul/imvoxelnet) repository as it is not supported for indoor scenes in `mmdetection3d`.
-Inference speed in scenes per second is measured on a single NVidia GTX1080Ti.
+For `VoteNet` and `ImVoteNet`, we provide the configs and checkpoints with our Mobius angle parametrization.
+For `ImVoxelNet`, please refer to the [imvoxelnet](https://github.com/saic-vul/imvoxelnet) repository as it is not currently supported in `mmdetection3d`.
+Inference speed (scenes per second) is measured on a single NVidia GTX1080Ti.
 
 **FCAF3D**
 
