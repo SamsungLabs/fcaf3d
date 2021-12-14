@@ -13,7 +13,7 @@ RUN pip install mmsegmentation==0.14.1
 
 # Install MMDetection3D
 RUN conda clean --all
-RUN git clone https://github.com/saic-vul/fcaf3d.git /mmdetection3d
+RUN git clone https://github.com/samsunglabs/fcaf3d.git /mmdetection3d
 WORKDIR /mmdetection3d
 ENV FORCE_CUDA="1"
 RUN pip install -r requirements/build.txt
