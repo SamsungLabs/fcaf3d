@@ -19,20 +19,15 @@ ENV FORCE_CUDA="1"
 RUN pip install -r requirements/build.txt
 RUN pip install --no-cache-dir -e .
 
-# Uninstall pycocotools installed by nuscenes-devkit and reinstall mmpycocotools
-RUN pip uninstall pycocotools --no-cache-dir -y
-RUN pip install mmpycocotools --no-cache-dir --force --no-deps
-
-# Install other packages
-RUN pip install open3d==0.12.0
-
 # Install Minkowski Engine
 RUN apt-get install -y python3-dev libopenblas-dev
-RUN pip install ninja
-RUN pip install -U git+https://github.com/NVIDIA/MinkowskiEngine --install-option="--blas=openblas" -v --no-deps
+RUN pip install ninja==1.10.2.3
+RUN pip install -U git+https://github.com/NVIDIA/MinkowskiEngine@v0.5.4 --install-option="--blas=openblas" -v --no-deps
 
 # Install differentiable IoU
 RUN git clone https://github.com/lilanxiao/Rotated_IoU /rotated_iou
+WORKDIR /rotated_iou
+RUN git checkout 3bdca6b20d981dffd773507e97f1b53641e98d0a
 RUN cp -r /rotated_iou/cuda_op /mmdetection3d/mmdet3d/ops/rotated_iou
 WORKDIR /mmdetection3d/mmdet3d/ops/rotated_iou/cuda_op
 RUN python setup.py install

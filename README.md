@@ -19,11 +19,11 @@ For convenience, we provide a [Dockerfile](docker/Dockerfile).
 
 Alternatively, you can install all required packages manually. This implementation is based on [mmdetection3d](https://github.com/open-mmlab/mmdetection3d) framework.
 Please refer to the original installation guide [getting_started.md](docs/getting_started.md), replacing `open-mmlab/mmdetection3d` with `samsunglabs/fcaf3d`.
-Also, [MinkowskiEngine](https://github.com/NVIDIA/MinkowskiEngine) and [rotated_iou](https://github.com/lilanxiao/Rotated_IoU) should be installed with [these](https://github.com/samsunglabs/fcaf3d/blob/master/docker/Dockerfile#L35-L38) commands.
+Also, [MinkowskiEngine](https://github.com/NVIDIA/MinkowskiEngine) and [rotated_iou](https://github.com/lilanxiao/Rotated_IoU) should be installed with [these](https://github.com/samsunglabs/fcaf3d/blob/master/docker/Dockerfile#L22-L33) commands.
 
 Most of the `FCAF3D`-related code locates in the following files: 
 [detectors/single_stage_sparse.py](mmdet3d/models/detectors/single_stage_sparse.py),
-[necks/fcaf3d_neck_with_head.py](mmdet3d/models/dense_heads/fcaf3d_neck_with_head.py),
+[dense_heads/fcaf3d_neck_with_head.py](mmdet3d/models/dense_heads/fcaf3d_neck_with_head.py),
 [backbones/me_resnet.py](mmdet3d/models/backbones/me_resnet.py).
 
 ### Getting Started
@@ -62,7 +62,7 @@ python tools/test.py configs/fcaf3d/fcaf3d_scannet-3d-18class.py \
 The metrics are obtained in 5 training runs followed by 5 test runs. We report both the best and the average values (the latter are given in round brackets).
 
 For `VoteNet` and `ImVoteNet`, we provide the configs and checkpoints with our Mobius angle parametrization.
-For `ImVoxelNet`, please refer to the [imvoxelnet](https://github.com/saic-vul/imvoxelnet) repository as it is not currently supported in `mmdetection3d`.
+For `ImVoxelNet`, please refer to the [imvoxelnet](https://github.com/saic-vul/imvoxelnet) repository as it is not currently supported in `mmdetection3d` for indoor datasets.
 Inference speed (scenes per second) is measured on a single NVidia GTX1080Ti.
 
 **FCAF3D**
