@@ -53,7 +53,7 @@ Visualizations can be created with [test](tools/test.py) script.
 For better visualizations, you may set `score_thr` in configs to `0.20`:
 ```shell
 python tools/test.py configs/fcaf3d/fcaf3d_scannet-3d-18class.py \
-    work_dirs/fcaf3d_scannet-3d-18class/latest.pth --show \
+    work_dirs/fcaf3d_scannet-3d-18class/latest.pth --eval mAP --show \
     --show-dir work_dirs/fcaf3d_scannet-3d-18class
 ```
 
