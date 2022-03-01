@@ -7,7 +7,7 @@ ENV CMAKE_PREFIX_PATH="$(dirname $(which conda))/../"
 RUN apt-get update && apt-get install -y ffmpeg libsm6 libxext6 git ninja-build libglib2.0-0 libsm6 libxrender-dev libxext6
 
 # Install MMCV, MMDetection and MMSegmentation
-RUN pip install mmcv-full==1.3.8 -f https://download.openmmlab.com/mmcv/dist/cu102/torch1.8.1/index.html
+RUN pip install mmcv-full==1.3.8 -f https://download.openmmlab.com/mmcv/dist/cu102/torch1.8.0/index.html
 RUN pip install mmdet==2.14.0
 RUN pip install mmsegmentation==0.14.1
 
