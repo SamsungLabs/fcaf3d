@@ -12,6 +12,7 @@ from .ssd_3d_head import SSD3DHead
 from .vote_head import VoteHead
 from .vote_head_v2 import VoteHeadV2
 from .fcaf3d_neck_with_head import Fcaf3DNeckWithHead, Fcaf3DAssigner
+from .gsdn_neck_with_head import GsdnNeckWithHead
 
 __all__ = [
     'Anchor3DHead', 'FreeAnchor3DHead', 'PartA2RPNHead', 'VoteHead',
