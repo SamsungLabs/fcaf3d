@@ -33,3 +33,4 @@ RUN git checkout 3bdca6b20d981dffd773507e97f1b53641e98d0a
 RUN cp -r /rotated_iou/cuda_op /mmdetection3d/mmdet3d/ops/rotated_iou
 WORKDIR /mmdetection3d/mmdet3d/ops/rotated_iou/cuda_op
 RUN python setup.py install
+WORKDIR /mmdetection3d
