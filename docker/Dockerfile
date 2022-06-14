@@ -24,7 +24,12 @@ RUN pip install --no-cache-dir -e .
 # Install Minkowski Engine
 RUN apt-get install -y python3-dev libopenblas-dev
 RUN pip install ninja==1.10.2.3
-RUN pip install -U git+https://github.com/NVIDIA/MinkowskiEngine@v0.5.4 --install-option="--blas=openblas" -v --no-deps
+RUN pip install \
+  -U git+https://github.com/NVIDIA/MinkowskiEngine@v0.5.4 \
+  --install-option="--blas=openblas" \
+  --install-option="--force_cuda" \
+  -v \
+  --no-deps
 
 # Install differentiable IoU
 RUN git clone https://github.com/lilanxiao/Rotated_IoU /rotated_iou
