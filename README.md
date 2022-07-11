@@ -5,6 +5,7 @@
 ## FCAF3D: Fully Convolutional Anchor-Free 3D Object Detection
 
 **News**:
+ * :fire: July, 2022. Our paper is accepted at [ECCV 2022](https://eccv2022.ecva.net/).
  * :fire: March, 2022. We have updated the [preprint](https://arxiv.org/abs/2112.00322) adding more comparison with fully convolutional [GSDN](https://arxiv.org/abs/2006.12356) baseline. 
 
 This repository contains an implementation of FCAF3D, a 3D object detection method introduced in our paper:
