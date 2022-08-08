@@ -5,6 +5,7 @@
 ## FCAF3D: Fully Convolutional Anchor-Free 3D Object Detection
 
 **News**:
+ * :fire: August, 2022. FCAF3D is [now](https://github.com/open-mmlab/mmdetection3d/pull/1703) fully [supported](https://github.com/open-mmlab/mmdetection3d/tree/master/configs/fcaf3d) in [mmdetection3d](https://github.com/open-mmlab/mmdetection3d).
  * :fire: July, 2022. Our paper is accepted at [ECCV 2022](https://eccv2022.ecva.net/).
  * :fire: March, 2022. We have updated the [preprint](https://arxiv.org/abs/2112.00322) adding more comparison with fully convolutional [GSDN](https://arxiv.org/abs/2006.12356) baseline. 
 
