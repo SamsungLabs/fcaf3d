@@ -6,7 +6,7 @@
 
 **News**:
  * :fire: August, 2022. FCAF3D is [now](https://github.com/open-mmlab/mmdetection3d/pull/1703) fully [supported](https://github.com/open-mmlab/mmdetection3d/tree/master/configs/fcaf3d) in [mmdetection3d](https://github.com/open-mmlab/mmdetection3d).
- * :fire: July, 2022. Our paper is accepted at [ECCV 2022](https://eccv2022.ecva.net/).
+ * :fire: July, 2022. Our paper is accepted at [ECCV 2022](https://www.ecva.net/papers.php).
  * :fire: March, 2022. We have updated the [preprint](https://arxiv.org/abs/2112.00322) adding more comparison with fully convolutional [GSDN](https://arxiv.org/abs/2006.12356) baseline. 
 
 This repository contains an implementation of FCAF3D, a 3D object detection method introduced in our paper:
@@ -113,10 +113,12 @@ Inference speed (scenes per second) is measured on a single NVidia GTX1080Ti.
 
 If you find this work useful for your research, please cite our paper:
 ```
-@article{rukhovich2021fcaf3d,
-  title={FCAF3D: Fully Convolutional Anchor-Free 3D Object Detection},
-  author={Danila Rukhovich, Anna Vorontsova, Anton Konushin},
-  journal={arXiv preprint arXiv:2112.00322},
-  year={2021}
+@inproceedings{rukhovich2022fcaf3d,
+  title={FCAF3D: fully convolutional anchor-free 3D object detection},
+  author={Rukhovich, Danila and Vorontsova, Anna and Konushin, Anton},
+  booktitle={European Conference on Computer Vision},
+  pages={477--493},
+  year={2022},
+  organization={Springer}
 }
 ```
