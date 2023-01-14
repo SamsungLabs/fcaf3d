@@ -294,7 +294,8 @@ def show_det_result_meshlab(data,
                             out_dir,
                             score_thr=0.0,
                             show=False,
-                            snapshot=False):
+                            snapshot=False,
+                            ):
     """Show 3D detection result by meshlab."""
     points = data['points'][0][0].cpu().numpy()
     pts_filename = data['img_metas'][0][0]['pts_filename']
@@ -304,15 +305,19 @@ def show_det_result_meshlab(data,
         pred_bboxes = result[0]['pts_bbox']['boxes_3d'].tensor.numpy()
         pred_scores = result[0]['pts_bbox']['scores_3d'].numpy()
     else:
-        pred_bboxes = result[0]['boxes_3d'].tensor.numpy()
+        pred_bboxes = result[0]['boxes_3d'].corners.numpy() # without corners, when visualized the predicted bounding boxes are distorted.
         pred_scores = result[0]['scores_3d'].numpy()
-
+        pred_labels = result[0]['labels_3d'].numpy() # pred_label is an essential parameter when executing _write_oriented_bbox.
     # filter out low score bboxes for visualization
     if score_thr > 0:
+        
         inds = pred_scores > score_thr
         pred_bboxes = pred_bboxes[inds]
-
+        
+        
+    
     # for now we convert points into depth mode
+    
     box_mode = data['img_metas'][0][0]['box_mode_3d']
     if box_mode != Box3DMode.DEPTH:
         points = points[..., [1, 0, 2]]
@@ -324,7 +329,9 @@ def show_det_result_meshlab(data,
     show_result(
         points,
         None,
+        None,
         show_bboxes,
+        pred_labels, # pred_label is an essential parameter when executing _write_oriented_bbox
         out_dir,
         file_name,
         show=show,
