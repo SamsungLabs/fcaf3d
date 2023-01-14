@@ -294,7 +294,7 @@ def show_det_result_meshlab(data,
                             out_dir,
                             score_thr=0.0,
                             show=False,
-                            snapshot=False,
+                            snapshot=False
                             ):
     """Show 3D detection result by meshlab."""
     points = data['points'][0][0].cpu().numpy()
