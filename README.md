@@ -5,6 +5,7 @@
 ## FCAF3D: Fully Convolutional Anchor-Free 3D Object Detection
 
 **News**:
+ * :rocket: June, 2023. We add ScanNet-pretrained S3DIS model and log significantly pushing forward state-of-the-art.
  * :fire: February, 2023. Feel free to visit our new FCAF3D-based 3D instance segmentation [TD3D](https://github.com/samsunglabs/td3d) and real-time 3D object detection [TR3D](https://github.com/samsunglabs/tr3d).
  * :fire: August, 2022. FCAF3D is [now](https://github.com/open-mmlab/mmdetection3d/pull/1703) fully [supported](https://github.com/open-mmlab/mmdetection3d/tree/master/configs/fcaf3d) in [mmdetection3d](https://github.com/open-mmlab/mmdetection3d).
  * :fire: July, 2022. Our paper is accepted at [ECCV 2022](https://www.ecva.net/papers.php).
@@ -70,7 +71,8 @@ The metrics are obtained in 5 training runs followed by 5 test runs. We report b
 
 For `VoteNet` and `ImVoteNet`, we provide the configs and checkpoints with our Mobius angle parametrization.
 For `ImVoxelNet`, please refer to the [imvoxelnet](https://github.com/saic-vul/imvoxelnet) repository as it is not currently supported in `mmdetection3d` for indoor datasets.
-Inference speed (scenes per second) is measured on a single NVidia GTX1080Ti.
+Inference speed (scenes per second) is measured on a single NVidia GTX1080Ti. Please, note that ScanNet-pretrained S3DIS model was actually trained in the original
+[open-mmlab/mmdetection3d](https://github.com/open-mmlab/mmdetection3d/tree/main/configs/fcaf3d) codebase, so it can be inferenced only in their repo.
 
 **FCAF3D**
 
@@ -79,6 +81,7 @@ Inference speed (scenes per second) is measured on a single NVidia GTX1080Ti.
 | ScanNet | 71.5 (70.7) | 57.3 (56.0) | [model](https://github.com/samsunglabs/fcaf3d/releases/download/v1.0/20211007_144747.pth) &#124; [log](https://github.com/samsunglabs/fcaf3d/releases/download/v1.0/20211007_144747_fcaf3d_scannet.log) &#124; [config](configs/fcaf3d/fcaf3d_scannet-3d-18class.py) |
 | SUN RGB-D | 64.2 (63.8) | 48.9 (48.2) | [model](https://github.com/samsunglabs/fcaf3d/releases/download/v1.0/20211007_144908.pth) &#124; [log](https://github.com/samsunglabs/fcaf3d/releases/download/v1.0/20211007_144908_fcaf3d_sunrgbd.log) &#124; [config](configs/fcaf3d/fcaf3d_sunrgbd-3d-10class.py) |
 | S3DIS | 66.7 (64.9) | 45.9 (43.8) | [model](https://github.com/samsunglabs/fcaf3d/releases/download/v1.0/20211011_084059.pth) &#124; [log](https://github.com/samsunglabs/fcaf3d/releases/download/v1.0/20211011_084059_fcaf3d_s3dis.log) &#124; [config](configs/fcaf3d/fcaf3d_s3dis-3d-5class.py) |
+| S3DIS <br> ScanNet-pretrained | 75.7 (74.1) | 58.2 (56.1) | [model](https://github.com/SamsungLabs/fcaf3d/releases/download/v1.0/20230601_131153_fcaf3d_scannet-pretrain_s3dis.pth) &#124; [log](https://github.com/SamsungLabs/fcaf3d/releases/download/v1.0/20230601_131153_fcaf3d_scannet-pretrain_s3dis.log) &#124; [config]([configs/fcaf3d/fcaf3d_s3dis-3d-5class.py](https://github.com/SamsungLabs/fcaf3d/releases/download/v1.0/20230601_131153_fcaf3d_scannet-pretrain_s3dis.py)) |
 
 
 **Faster FCAF3D on ScanNet**
